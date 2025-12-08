@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db, storage, auth } from '../firebase';
-import { Upload, Loader2, MapPin, Home, Ruler, BedDouble, Bath, Phone, Locate, X, IndianRupee } from 'lucide-react';
+import { Upload, Loader2, MapPin, Home, Ruler, BedDouble, Bath, Phone, X, IndianRupee } from 'lucide-react';
 import firebase from 'firebase/compat/app';
 
 const AMENITIES_LIST = [
@@ -17,11 +17,10 @@ const AddProperty: React.FC = () => {
   const [freeAdsUsed, setFreeAdsUsed] = useState(0);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
-  const [locating, setLocating] = useState(false);
   const [phoneError, setPhoneError] = useState('');
 
   const [formData, setFormData] = useState({
-    type: 'rent', // 'rent' or 'sale'
+    type: 'rent',
     title: '',
     address: '',
     price: '',
@@ -57,11 +56,7 @@ const AddProperty: React.FC = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    
-    // Clear specific errors on change
-    if (name === 'contactNumber') {
-      setPhoneError('');
-    }
+    if (name === 'contactNumber') setPhoneError('');
   };
 
   const handleTypeChange = (type: string) => {
@@ -82,15 +77,11 @@ const AddProperty: React.FC = () => {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const newFiles = Array.from(e.target.files);
-      
-      // Limit to approx 20 images just for sanity
       if (imageFiles.length + newFiles.length > 20) {
         alert("You can upload a maximum of 20 photos.");
         return;
       }
-
       setImageFiles(prev => [...prev, ...newFiles]);
-      
       const newPreviews = newFiles.map(file => URL.createObjectURL(file));
       setPreviewUrls(prev => [...prev, ...newPreviews]);
     }
@@ -99,30 +90,6 @@ const AddProperty: React.FC = () => {
   const removeImage = (index: number) => {
     setImageFiles(prev => prev.filter((_, i) => i !== index));
     setPreviewUrls(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleDetectLocation = () => {
-    if (!navigator.geolocation) {
-        alert("Geolocation is not supported by your browser");
-        return;
-    }
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            const lat = position.coords.latitude.toFixed(4);
-            const lng = position.coords.longitude.toFixed(4);
-            setFormData(prev => ({ 
-                ...prev, 
-                address: `Detected Location (Lat: ${lat}, Lng: ${lng}) - Please edit to add full address` 
-            }));
-            setLocating(false);
-        },
-        (error) => {
-            console.error(error);
-            alert("Unable to retrieve your location");
-            setLocating(false);
-        }
-    );
   };
 
   const validatePhoneNumber = (phone: string) => {
@@ -162,7 +129,7 @@ const AddProperty: React.FC = () => {
 
       const imageUrls = await Promise.all(uploadPromises);
 
-      // 2. Prepare Property Data (Without createdAt, as we add it on server write)
+      // 2. Prepare Property Data
       const propertyData = {
         type: formData.type,
         title: formData.title,
@@ -182,14 +149,11 @@ const AddProperty: React.FC = () => {
 
       // 3. Check Quota and Route
       if (freeAdsUsed === 0) {
-          // --- FREE AD FLOW ---
-          // Add createdAt here directly
           await db.collection("properties").add({
               ...propertyData,
               createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
           
-          // Increment freeAdsUsed
           await db.collection('users').doc(auth.currentUser.uid).set({
               freeAdsUsed: firebase.firestore.FieldValue.increment(1)
           }, { merge: true });
@@ -197,9 +161,6 @@ const AddProperty: React.FC = () => {
           alert("Your first ad is posted for FREE!");
           navigate('/');
       } else {
-          // --- PAID FLOW ---
-          // Navigate to payment page with property data
-          // We do NOT add serverTimestamp here to state, we do it in PaymentPage
           navigate('/payment', { state: { propertyData } });
       }
       
@@ -264,11 +225,29 @@ const AddProperty: React.FC = () => {
                 </div>
             </div>
 
+            {/* Address Input */}
+            <div className="sm:col-span-6">
+                <label className="block text-sm font-medium text-gray-700">Property Location / Address</label>
+                <div className="mt-1 relative rounded-md shadow-sm">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <MapPin className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                        type="text"
+                        name="address"
+                        required
+                        className="focus:ring-brand-500 focus:border-brand-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 border"
+                        placeholder="Complete Address (House No, Building, Street, City)"
+                        value={formData.address}
+                        onChange={handleInputChange}
+                    />
+                </div>
+            </div>
+
             {/* Image Upload Section */}
             <div className="space-y-4">
                 <label className="block text-sm font-medium text-gray-700">Property Photos (Add Multiple)</label>
                 
-                {/* Previews Grid */}
                 {previewUrls.length > 0 && (
                   <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-4 mb-4">
                     {previewUrls.map((url, index) => (
@@ -342,31 +321,6 @@ const AddProperty: React.FC = () => {
                         className="focus:ring-brand-500 focus:border-brand-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 border"
                         placeholder={formData.type === 'rent' ? "15000" : "5000000"}
                         value={formData.price}
-                        onChange={handleInputChange}
-                    />
-                </div>
-              </div>
-
-              {/* Address */}
-              <div className="sm:col-span-6">
-                <div className="flex justify-between items-center">
-                    <label className="block text-sm font-medium text-gray-700">Full Address</label>
-                    <button type="button" onClick={handleDetectLocation} className="text-brand-600 text-xs font-medium flex items-center hover:underline">
-                        <Locate size={14} className="mr-1" />
-                        {locating ? 'Detecting...' : 'Use Current Location'}
-                    </button>
-                </div>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <MapPin className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                        type="text"
-                        name="address"
-                        required
-                        className="focus:ring-brand-500 focus:border-brand-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 border"
-                        placeholder="House No, Street, Area, City"
-                        value={formData.address}
                         onChange={handleInputChange}
                     />
                 </div>

@@ -56,14 +56,22 @@ const PaymentPage: React.FC = () => {
                 </div>
 
                 <div className="p-8 flex flex-col items-center">
-                    <div className="bg-gray-100 p-4 rounded-xl mb-6 border-2 border-dashed border-gray-300">
-                        {/* Placeholder QR Code - In a real app, use a dynamic generator or real image */}
+                    <div className="bg-white p-4 rounded-xl mb-6 border-2 border-brand-100 shadow-inner flex flex-col items-center justify-center w-full">
+                        {/* 
+                           INSTRUCTION: Place your QR code image in the 'public' folder and name it 'payment-qr.png'
+                           or 'payment-qr.jpg'. The code below tries to load it.
+                        */}
                         <img 
-                           src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=merchant@upi&pn=AndamanHomes&am=20.00&cu=INR"
+                           src="/payment-qr.png"
                            alt="Payment QR Code"
-                           className="w-48 h-48 mix-blend-multiply"
+                           className="w-48 h-48 object-contain"
+                           onError={(e) => {
+                               // Fallback to placeholder if user hasn't added the file yet
+                               e.currentTarget.src = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=merchant@upi&pn=AndamanHomes&am=20.00&cu=INR";
+                               e.currentTarget.onerror = null; // Prevent infinite loop
+                           }}
                         />
-                        <p className="text-center text-xs text-gray-500 mt-2">Scan with any UPI App</p>
+                        <p className="text-center text-xs text-gray-500 mt-3 font-medium">Scan with any UPI App (GPay, PhonePe, Paytm)</p>
                     </div>
 
                     <div className="text-center space-y-2 mb-8">
