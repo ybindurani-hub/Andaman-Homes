@@ -1,9 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebase';
 import firebase from 'firebase/compat/app';
-import { Loader2, CheckCircle, ShieldCheck, QrCode } from 'lucide-react';
+import { Loader2, CheckCircle, ShieldCheck } from 'lucide-react';
 
 const PaymentPage: React.FC = () => {
     const location = useLocation();
@@ -12,7 +12,7 @@ const PaymentPage: React.FC = () => {
     const [loading, setLoading] = useState(false);
 
     // Redirect if no data found
-    React.useEffect(() => {
+    useEffect(() => {
         if (!propertyData) {
             navigate('/add-property');
         }
@@ -58,20 +58,21 @@ const PaymentPage: React.FC = () => {
                 <div className="p-8 flex flex-col items-center">
                     <div className="bg-white p-4 rounded-xl mb-6 border-2 border-brand-100 shadow-inner flex flex-col items-center justify-center w-full">
                         {/* 
-                           INSTRUCTION: Place your QR code image in the 'public' folder and name it 'payment-qr.png'
-                           or 'payment-qr.jpg'. The code below tries to load it.
+                           IMPORTANT: 
+                           Save your QR code image as 'payment-qr.png' in the 'public' folder of your project.
                         */}
                         <img 
                            src="/payment-qr.png"
-                           alt="Payment QR Code"
-                           className="w-48 h-48 object-contain"
+                           alt="Scan to Pay"
+                           className="w-56 h-56 object-contain rounded-lg border border-gray-100"
                            onError={(e) => {
-                               // Fallback to placeholder if user hasn't added the file yet
-                               e.currentTarget.src = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=merchant@upi&pn=AndamanHomes&am=20.00&cu=INR";
-                               e.currentTarget.onerror = null; // Prevent infinite loop
+                               // Fallback to placeholder only if the file is missing
+                               const target = e.currentTarget;
+                               target.src = "https://api.qrserver.com/v1/create-qr-code/?size=225x225&data=upi://pay?pa=merchant@upi&pn=AndamanHomes&am=20.00&cu=INR";
+                               target.onerror = null; 
                            }}
                         />
-                        <p className="text-center text-xs text-gray-500 mt-3 font-medium">Scan with any UPI App (GPay, PhonePe, Paytm)</p>
+                        <p className="text-center text-xs text-gray-500 mt-3 font-medium">Scan with GPay, PhonePe, or Paytm</p>
                     </div>
 
                     <div className="text-center space-y-2 mb-8">
