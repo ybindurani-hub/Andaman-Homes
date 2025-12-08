@@ -8,6 +8,8 @@ import Signup from './pages/Signup';
 import AddProperty from './pages/AddProperty';
 import PropertyDetails from './pages/PropertyDetails';
 import PaymentPage from './pages/PaymentPage';
+import ChatList from './pages/ChatList';
+import ChatScreen from './pages/ChatScreen';
 import { auth } from './firebase';
 
 // Helper hook for auth state
@@ -59,6 +61,24 @@ const App: React.FC = () => {
             } 
           />
           <Route path="/property/:id" element={<PropertyDetails />} />
+          
+          {/* Chat Routes */}
+          <Route 
+            path="/chats" 
+            element={
+              <ProtectedRouteManual>
+                <ChatList />
+              </ProtectedRouteManual>
+            } 
+          />
+          <Route 
+            path="/chat/:chatId" 
+            element={
+              <ProtectedRouteManual>
+                <ChatScreen />
+              </ProtectedRouteManual>
+            } 
+          />
         </Routes>
       </div>
     </Router>

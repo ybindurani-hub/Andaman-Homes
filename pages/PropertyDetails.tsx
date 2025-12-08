@@ -1,15 +1,16 @@
 
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebase';
+import firebase from 'firebase/compat/app';
 import { Property } from '../types';
-import { MapPin, BedDouble, Bath, Ruler, CheckCircle, ArrowLeft, Phone, Shield, AlertTriangle, Tag } from 'lucide-react';
+import { MapPin, BedDouble, Bath, Ruler, CheckCircle, ArrowLeft, Phone, Shield, AlertTriangle, Tag, MessageSquare } from 'lucide-react';
 
 const PropertyDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [property, setProperty] = useState<Property | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showContact, setShowContact] = useState(false);
   const [activeImage, setActiveImage] = useState<string>('');
   const [allImages, setAllImages] = useState<string[]>([]);
   const [isOwner, setIsOwner] = useState(false);
@@ -58,6 +59,46 @@ const PropertyDetails: React.FC = () => {
           console.error("Error updating status:", error);
           alert("Failed to update status");
       }
+  };
+
+  const handleStartChat = async () => {
+    if (!auth.currentUser) {
+        navigate('/login');
+        return;
+    }
+    
+    if (!property) return;
+
+    if (property.ownerId === auth.currentUser.uid) {
+        alert("You cannot chat with yourself!");
+        return;
+    }
+
+    try {
+        // Create a unique Chat ID based on sorted UIDs to ensure one chat room per pair
+        const uids = [auth.currentUser.uid, property.ownerId].sort();
+        const chatId = uids.join('_');
+
+        const chatRef = db.collection('chats').doc(chatId);
+        const chatDoc = await chatRef.get();
+
+        if (!chatDoc.exists) {
+            // Create chat room if it doesn't exist
+            await chatRef.set({
+                participants: uids,
+                propertyId: property.id,
+                propertyTitle: property.title,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                lastMessage: '',
+                lastMessageTimestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+        
+        navigate(`/chat/${chatId}`);
+    } catch (error) {
+        console.error("Error starting chat:", error);
+        alert("Failed to start chat.");
+    }
   };
 
   if (loading) {
@@ -129,13 +170,13 @@ const PropertyDetails: React.FC = () => {
         )}
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden grid grid-cols-1 lg:grid-cols-2">
-            {/* Image Side */}
-            <div className="bg-gray-200 flex flex-col">
-                <div className="h-96 w-full relative">
+            {/* Image Side - Improved View */}
+            <div className="bg-black flex flex-col justify-center">
+                <div className="h-[400px] w-full relative">
                     <img 
                         src={activeImage} 
                         alt={property.title} 
-                        className={`w-full h-full object-cover ${isInactive ? 'grayscale opacity-75' : ''}`}
+                        className={`w-full h-full object-contain ${isInactive ? 'grayscale opacity-75' : ''}`}
                     />
                     {isInactive && (
                         <div className="absolute inset-0 flex items-center justify-center">
@@ -147,12 +188,12 @@ const PropertyDetails: React.FC = () => {
                 </div>
                 {/* Thumbnails */}
                 {allImages.length > 1 && (
-                  <div className="flex gap-2 p-4 overflow-x-auto bg-white border-b border-gray-100 lg:border-none">
+                  <div className="flex gap-2 p-4 overflow-x-auto bg-gray-900 border-t border-gray-800">
                     {allImages.map((img, idx) => (
                       <button 
                         key={idx}
                         onClick={() => setActiveImage(img)}
-                        className={`flex-shrink-0 w-20 h-20 rounded-md overflow-hidden border-2 transition-all ${activeImage === img ? 'border-brand-500 ring-2 ring-brand-200' : 'border-transparent opacity-70 hover:opacity-100'}`}
+                        className={`flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border-2 transition-all ${activeImage === img ? 'border-brand-500 ring-2 ring-brand-900' : 'border-gray-700 opacity-60 hover:opacity-100'}`}
                       >
                         <img src={img} alt={`View ${idx + 1}`} className="w-full h-full object-cover" />
                       </button>
@@ -162,11 +203,11 @@ const PropertyDetails: React.FC = () => {
             </div>
 
             {/* Content Side */}
-            <div className="p-8 lg:p-10 flex flex-col justify-between">
+            <div className="p-6 lg:p-10 flex flex-col justify-between">
                 <div>
                     <div className="flex justify-between items-start mb-4">
-                        <h1 className="text-3xl font-bold text-gray-900 leading-tight">{property.title}</h1>
-                        <span className={`text-sm font-semibold px-3 py-1 rounded-full whitespace-nowrap ml-4 uppercase ${property.type === 'sale' ? 'bg-blue-100 text-blue-800' : 'bg-brand-100 text-brand-800'}`}>
+                        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 leading-tight">{property.title}</h1>
+                        <span className={`text-xs sm:text-sm font-semibold px-3 py-1 rounded-full whitespace-nowrap ml-4 uppercase ${property.type === 'sale' ? 'bg-blue-100 text-blue-800' : 'bg-brand-100 text-brand-800'}`}>
                             For {property.type || 'Rent'}
                         </span>
                     </div>
@@ -177,20 +218,20 @@ const PropertyDetails: React.FC = () => {
                     </div>
 
                     {/* Key Metrics */}
-                    <div className="grid grid-cols-3 gap-4 mb-8">
-                        <div className="bg-gray-50 p-4 rounded-xl text-center border border-gray-100">
+                    <div className="grid grid-cols-3 gap-3 mb-8">
+                        <div className="bg-gray-50 p-3 rounded-xl text-center border border-gray-100">
                             <BedDouble size={24} className="mx-auto text-brand-500 mb-2" />
-                            <div className="text-2xl font-bold text-gray-900">{property.bedrooms}</div>
+                            <div className="text-xl font-bold text-gray-900">{property.bedrooms}</div>
                             <div className="text-xs text-gray-500 uppercase tracking-wide">Bedrooms</div>
                         </div>
-                        <div className="bg-gray-50 p-4 rounded-xl text-center border border-gray-100">
+                        <div className="bg-gray-50 p-3 rounded-xl text-center border border-gray-100">
                             <Bath size={24} className="mx-auto text-brand-500 mb-2" />
-                            <div className="text-2xl font-bold text-gray-900">{property.bathrooms}</div>
+                            <div className="text-xl font-bold text-gray-900">{property.bathrooms}</div>
                             <div className="text-xs text-gray-500 uppercase tracking-wide">Bathrooms</div>
                         </div>
-                        <div className="bg-gray-50 p-4 rounded-xl text-center border border-gray-100">
+                        <div className="bg-gray-50 p-3 rounded-xl text-center border border-gray-100">
                             <Ruler size={24} className="mx-auto text-brand-500 mb-2" />
-                            <div className="text-2xl font-bold text-gray-900">{property.area}</div>
+                            <div className="text-xl font-bold text-gray-900">{property.area}</div>
                             <div className="text-xs text-gray-500 uppercase tracking-wide">Sq Ft</div>
                         </div>
                     </div>
@@ -217,36 +258,46 @@ const PropertyDetails: React.FC = () => {
                 </div>
 
                 <div className="border-t border-gray-100 pt-6">
-                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                        <div>
+                    <div className="flex flex-col gap-4">
+                         <div>
                             <div className="text-sm text-gray-500">{property.type === 'rent' ? 'Rent / Month' : 'Total Price'}</div>
                             <div className="text-3xl font-bold text-brand-600">₹{property.price.toLocaleString('en-IN')}</div>
                         </div>
                         
-                        {!isInactive && (
-                            !showContact ? (
+                        {!isInactive && !isOwner && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                                {/* Chat Button */}
                                 <button 
-                                    onClick={() => setShowContact(true)}
-                                    className="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-white px-8 py-3 rounded-lg font-semibold text-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-brand-500/20"
+                                    onClick={handleStartChat}
+                                    className="bg-brand-600 hover:bg-brand-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 shadow-sm"
                                 >
-                                    <Phone size={20} />
-                                    Contact Owner
+                                    <MessageSquare size={20} />
+                                    Chat with Owner
                                 </button>
-                            ) : (
-                                <div className="w-full sm:w-auto bg-green-50 border border-green-200 p-4 rounded-lg flex flex-col items-center animate-fade-in">
-                                    <div className="text-sm text-green-800 font-medium mb-1">Owner Contact Number</div>
-                                    {property.contactNumber ? (
-                                        <>
-                                            <div className="text-2xl font-bold text-green-700 select-all">{property.contactNumber}</div>
-                                            <div className="flex items-center text-xs text-green-600 mt-2">
-                                                <Shield size={12} className="mr-1" /> Verified Owner
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <div className="text-lg font-bold text-red-500 mt-1">Contact number not provided</div>
-                                    )}
-                                </div>
-                            )
+
+                                {/* Call Button */}
+                                {property.contactNumber ? (
+                                    <a 
+                                        href={`tel:${property.contactNumber}`}
+                                        className="bg-gray-900 hover:bg-gray-800 text-white px-6 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 shadow-sm"
+                                    >
+                                        <Phone size={20} />
+                                        Call Owner
+                                    </a>
+                                ) : (
+                                    <div className="bg-gray-100 text-gray-500 px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 cursor-not-allowed">
+                                        <Phone size={20} />
+                                        No Number
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        
+                        {/* If owner, show message */}
+                        {isOwner && (
+                           <div className="bg-brand-50 p-3 rounded-lg text-brand-700 text-center text-sm">
+                               This is your property listing.
+                           </div> 
                         )}
                     </div>
                 </div>
