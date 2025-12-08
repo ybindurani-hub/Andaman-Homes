@@ -1,0 +1,7 @@
+{
+  "name": "NoBroker Clone",
+  "description": "A modern real estate application allowing users to list, browse, and view residential and commercial properties without a broker.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
