@@ -7,6 +7,7 @@ import { Home, Plus, LogOut, User as UserIcon, MessageSquare, Menu, X, Search, H
 
 const Navbar: React.FC = () => {
   const [user, setUser] = useState<firebase.User | null>(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -17,9 +18,14 @@ const Navbar: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  const handleLogout = async () => {
+  const handleLogoutClick = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = async () => {
     try {
       await auth.signOut();
+      setShowLogoutConfirm(false);
       navigate('/login');
     } catch (error) {
       console.error("Error logging out:", error);
@@ -69,7 +75,7 @@ const Navbar: React.FC = () => {
                        {user.email?.split('@')[0]}
                     </div>
                     <button 
-                      onClick={handleLogout}
+                      onClick={handleLogoutClick}
                       className="text-gray-500 hover:text-red-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
                       title="Logout"
                     >
@@ -140,7 +146,7 @@ const Navbar: React.FC = () => {
 
             {/* Account */}
             {user ? (
-                <button onClick={handleLogout} className={`flex flex-col items-center flex-1 py-1 text-gray-500`}>
+                <button onClick={handleLogoutClick} className={`flex flex-col items-center flex-1 py-1 text-gray-500`}>
                     <UserIcon size={24} />
                     <span className="text-[10px] font-medium mt-1">Logout</span>
                 </button>
@@ -152,6 +158,30 @@ const Navbar: React.FC = () => {
             )}
         </div>
       </div>
+
+      {/* --- LOGOUT CONFIRMATION MODAL --- */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm Logout</h3>
+            <p className="text-sm text-gray-600 mb-6">Are you sure you want to log out of Andaman Homes?</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmLogout}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg transition-colors shadow-sm"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };
