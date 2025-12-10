@@ -11,6 +11,7 @@ import PaymentPage from './pages/PaymentPage';
 import ChatList from './pages/ChatList';
 import ChatScreen from './pages/ChatScreen';
 import { auth } from './firebase';
+import { BannerAd } from './components/AdSpaces';
 
 // Helper hook for auth state
 function useAuthHook() {
@@ -28,18 +29,22 @@ function useAuthHook() {
 }
 
 // Defined outside App to prevent remounting on every render
-const ProtectedRouteManual = ({ children }: { children: React.ReactElement }) => {
+const ProtectedRouteManual = ({ children }: React.PropsWithChildren<{}>) => {
     const { user, loading } = useAuthHook();
     if (loading) return <div className="h-screen flex items-center justify-center text-brand-600">Loading...</div>;
     if (!user) return <Navigate to="/login" replace />;
-    return children;
+    return <>{children}</>;
 };
 
 const App: React.FC = () => {
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50 font-sans text-slate-900">
+      <div className="min-h-screen bg-gray-50 font-sans text-slate-900 pb-20 md:pb-0">
         <Navbar />
+        
+        {/* Top Banner Ad */}
+        <BannerAd position="top" />
+
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
@@ -80,6 +85,9 @@ const App: React.FC = () => {
             } 
           />
         </Routes>
+
+        {/* Bottom Banner Ad */}
+        <BannerAd position="bottom" />
       </div>
     </Router>
   );

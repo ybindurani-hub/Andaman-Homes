@@ -13,8 +13,6 @@ const AMENITIES_LIST = [
 const AddProperty: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [verifyingQuota, setVerifyingQuota] = useState(true);
-  const [freeAdsUsed, setFreeAdsUsed] = useState(0);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [phoneError, setPhoneError] = useState('');
@@ -31,27 +29,6 @@ const AddProperty: React.FC = () => {
     amenities: [] as string[],
     contactNumber: '',
   });
-
-  // Check user's free ad quota on mount
-  useEffect(() => {
-    const checkQuota = async () => {
-        if (!auth.currentUser) return;
-        try {
-            const userDoc = await db.collection('users').doc(auth.currentUser.uid).get();
-            if (userDoc.exists) {
-                const data = userDoc.data();
-                setFreeAdsUsed(data?.freeAdsUsed || 0);
-            } else {
-                setFreeAdsUsed(0);
-            }
-        } catch (error) {
-            console.error("Error fetching user profile:", error);
-        } finally {
-            setVerifyingQuota(false);
-        }
-    };
-    checkQuota();
-  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -76,7 +53,7 @@ const AddProperty: React.FC = () => {
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const newFiles = Array.from(e.target.files);
+      const newFiles: File[] = Array.from(e.target.files);
       if (imageFiles.length + newFiles.length > 20) {
         alert("You can upload a maximum of 20 photos.");
         return;
@@ -144,25 +121,20 @@ const AddProperty: React.FC = () => {
         imageUrl: imageUrls[0], 
         imageUrls: imageUrls,   
         ownerId: auth.currentUser.uid,
-        status: 'active'
+        status: 'active',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
       };
 
-      // 3. Check Quota and Route
-      if (freeAdsUsed === 0) {
-          await db.collection("properties").add({
-              ...propertyData,
-              createdAt: firebase.firestore.FieldValue.serverTimestamp()
-          });
-          
-          await db.collection('users').doc(auth.currentUser.uid).set({
-              freeAdsUsed: firebase.firestore.FieldValue.increment(1)
-          }, { merge: true });
+      // 3. Save directly (Unlimited Free Ads)
+      await db.collection("properties").add(propertyData);
+      
+      // Increment stats just for tracking, but no payment logic
+      await db.collection('users').doc(auth.currentUser.uid).set({
+          adsPosted: firebase.firestore.FieldValue.increment(1)
+      }, { merge: true });
 
-          alert("Your first ad is posted for FREE!");
-          navigate('/');
-      } else {
-          navigate('/payment', { state: { propertyData } });
-      }
+      alert("Ad Posted Successfully!");
+      navigate('/');
       
     } catch (error) {
       console.error("Error processing property: ", error);
@@ -171,14 +143,6 @@ const AddProperty: React.FC = () => {
       setLoading(false);
     }
   };
-
-  if (verifyingQuota) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-           <Loader2 className="animate-spin text-brand-600 h-8 w-8" />
-        </div>
-      );
-  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -190,15 +154,9 @@ const AddProperty: React.FC = () => {
                 <p className="text-brand-100 mt-1">Get genuine leads without any brokerage.</p>
             </div>
             <div className="hidden sm:block">
-                {freeAdsUsed === 0 ? (
-                    <span className="bg-green-500 text-white font-bold px-4 py-2 rounded-full text-sm shadow-lg animate-pulse">
-                        First Ad Free!
-                    </span>
-                ) : (
-                    <span className="bg-yellow-500 text-white font-bold px-4 py-2 rounded-full text-sm shadow-lg">
-                        Paid Ad: ₹20
-                    </span>
-                )}
+                 <span className="bg-green-500 text-white font-bold px-4 py-2 rounded-full text-sm shadow-lg">
+                     100% Free
+                 </span>
             </div>
           </div>
           
@@ -433,10 +391,10 @@ const AddProperty: React.FC = () => {
                     {loading ? (
                         <>
                             <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4" />
-                            {freeAdsUsed === 0 ? 'Post Free Ad' : 'Proceed to Payment'}
+                            Post Free Ad
                         </>
                     ) : (
-                        freeAdsUsed === 0 ? 'Post Free Ad' : 'Proceed to Payment (₹20)'
+                        'Post Free Ad'
                     )}
                 </button>
             </div>
