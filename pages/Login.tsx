@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { auth, googleProvider } from '../firebase';
 import firebase from 'firebase/compat/app';
 import { useNavigate, Link } from 'react-router-dom';
@@ -25,12 +25,27 @@ const Login: React.FC = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
+  // Handle Google Redirect Result (For Mobile)
+  useEffect(() => {
+    const checkRedirect = async () => {
+        try {
+            const result = await auth.getRedirectResult();
+            if (result.user) {
+                navigate('/');
+            }
+        } catch (err: any) {
+            console.error("Redirect Auth Error:", err);
+            setError(err.message || "Authentication failed.");
+        }
+    };
+    checkRedirect();
+  }, [navigate]);
+
   // --- Guest Login ---
   const handleGuestLogin = async () => {
       setLoading(true);
       setError('');
       try {
-          // Attempt persistence, but ignore if it fails (restricted env)
           try { await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch(e) {}
           
           await auth.signInAnonymously();
@@ -84,10 +99,16 @@ const Login: React.FC = () => {
       navigate('/');
     } catch (err: any) {
       console.error("Google Login Error:", err);
-      if (err.code === 'auth/operation-not-supported-in-this-environment' || err.message?.includes('location.protocol')) {
+      // If popup is blocked or fails on mobile, try redirect
+      if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+          try {
+             await auth.signInWithRedirect(googleProvider);
+             return; 
+          } catch (redirectErr: any) {
+             setError("Google Sign-In failed.");
+          }
+      } else if (err.code === 'auth/operation-not-supported-in-this-environment' || err.message?.includes('location.protocol')) {
         setError("Google Sign-In is restricted in this preview environment. Please use Email/Password or Guest Login.");
-      } else if (err.code === 'auth/popup-closed-by-user') {
-        setError("Sign-in cancelled.");
       } else if (err.code === 'auth/internal-error') {
         setError("Internal Error: Google Auth is having trouble. Try Guest Login.");
       } else {
@@ -111,7 +132,7 @@ const Login: React.FC = () => {
         }
     } catch (err: any) {
         console.error("Recaptcha Setup Error:", err);
-        throw err; // Re-throw to be caught by handleSendOtp
+        throw err;
     }
   };
 
@@ -141,15 +162,16 @@ const Login: React.FC = () => {
          setError("Phone Auth is not supported in this environment. Please use Email or Guest login.");
       } else if (err.code === 'auth/internal-error') {
          setError("Auth Error: Domain may not be whitelisted. Use Guest login.");
+      } else if (err.code === 'auth/captcha-check-failed') {
+         setError("Recaptcha verification failed. Please try again.");
       } else {
          setError(err.message || "Failed to send OTP.");
       }
       
-      // Reset recaptcha if failed
       if(window.recaptchaVerifier) {
           try {
             window.recaptchaVerifier.clear();
-          } catch(e) { /* ignore clear error */ }
+          } catch(e) { }
           window.recaptchaVerifier = undefined;
       }
     } finally {
@@ -187,12 +209,14 @@ const Login: React.FC = () => {
         {/* Method Toggle */}
         <div className="flex bg-gray-100 p-1 rounded-lg mb-6">
             <button
+                type="button"
                 className={`flex-1 flex items-center justify-center py-2 text-sm font-medium rounded-md transition-all ${method === 'email' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                 onClick={() => setMethod('email')}
             >
                 <Mail size={16} className="mr-2" /> Email
             </button>
             <button
+                type="button"
                 className={`flex-1 flex items-center justify-center py-2 text-sm font-medium rounded-md transition-all ${method === 'phone' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                 onClick={() => setMethod('phone')}
             >
@@ -311,6 +335,7 @@ const Login: React.FC = () => {
 
             <div className="mt-6 grid grid-cols-2 gap-3">
                 <button
+                    type="button"
                     onClick={handleGoogleLogin}
                     disabled={loading}
                     className="flex justify-center items-center gap-2 px-4 py-3 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 transition-all"
@@ -319,6 +344,7 @@ const Login: React.FC = () => {
                     Google
                 </button>
                 <button
+                    type="button"
                     onClick={handleGuestLogin}
                     disabled={loading}
                     className="flex justify-center items-center gap-2 px-4 py-3 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 transition-all"
@@ -332,7 +358,7 @@ const Login: React.FC = () => {
         <div className="text-center text-sm mt-6">
             <p className="text-gray-600">
                 Don't have an account?{' '}
-                <Link to="/signup" className="font-medium text-brand-600 hover:text-brand-500">
+                <Link to="/login" className="font-medium text-brand-600 hover:text-brand-500">
                     Sign up free
                 </Link>
             </p>
