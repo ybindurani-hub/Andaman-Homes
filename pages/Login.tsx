@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
 import { auth, googleProvider } from '../firebase';
 import firebase from 'firebase/compat/app';
 import { useNavigate, Link } from 'react-router-dom';
-import { LogIn, Phone, Mail, Loader2, KeyRound } from 'lucide-react';
+import { LogIn, Phone, Mail, Loader2, KeyRound, User, AlertCircle } from 'lucide-react';
 
 // Extend window to support recaptcha
 declare global {
@@ -24,16 +25,49 @@ const Login: React.FC = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
+  // --- Guest Login ---
+  const handleGuestLogin = async () => {
+      setLoading(true);
+      setError('');
+      try {
+          // Attempt persistence, but ignore if it fails (restricted env)
+          try { await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch(e) {}
+          
+          await auth.signInAnonymously();
+          navigate('/');
+      } catch (err: any) {
+          console.error("Guest Login Error:", err);
+          if (err.code === 'auth/operation-not-supported-in-this-environment') {
+             setError("Guest login restricted in this environment. Please try Email/Password.");
+          } else {
+             setError("Failed to sign in as guest.");
+          }
+      } finally {
+          setLoading(false);
+      }
+  };
+
   // --- Email Login ---
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
+      try { await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch(e) {}
+      
       await auth.signInWithEmailAndPassword(email, password);
       navigate('/');
     } catch (err: any) {
-      setError("Invalid email or password. Please try again.");
+      console.error(err);
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
+         setError("Incorrect email or password. Please try again.");
+      } else if (err.code === 'auth/operation-not-supported-in-this-environment') {
+         setError("This environment does not support this login method. Try Guest Login.");
+      } else if (err.code === 'auth/internal-error') {
+         setError("Internal connection error. Please try again later.");
+      } else {
+         setError(err.message || "Failed to sign in.");
+      }
     } finally {
       setLoading(false);
     }
@@ -44,16 +78,20 @@ const Login: React.FC = () => {
     setLoading(true);
     setError('');
     try {
+      try { await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch(e) {}
+
       await auth.signInWithPopup(googleProvider);
       navigate('/');
     } catch (err: any) {
       console.error("Google Login Error:", err);
-      if (err.code === 'auth/operation-not-supported-in-this-environment') {
-        setError("Google Sign-In is not supported in this preview environment. Please use Email/Password or run the app locally.");
+      if (err.code === 'auth/operation-not-supported-in-this-environment' || err.message?.includes('location.protocol')) {
+        setError("Google Sign-In is restricted in this preview environment. Please use Email/Password or Guest Login.");
       } else if (err.code === 'auth/popup-closed-by-user') {
         setError("Sign-in cancelled.");
+      } else if (err.code === 'auth/internal-error') {
+        setError("Internal Error: Google Auth is having trouble. Try Guest Login.");
       } else {
-        setError(err.message || "Google sign-in failed. Please try again.");
+        setError("Google sign-in failed. Try Guest mode.");
       }
     } finally {
       setLoading(false);
@@ -100,11 +138,11 @@ const Login: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/operation-not-supported-in-this-environment') {
-         setError("Phone Auth is not supported in this preview environment. Please use Email/Password.");
+         setError("Phone Auth is not supported in this environment. Please use Email or Guest login.");
       } else if (err.code === 'auth/internal-error') {
-         setError("Authentication failed. Ensure the domain is whitelisted in Firebase Console.");
+         setError("Auth Error: Domain may not be whitelisted. Use Guest login.");
       } else {
-         setError(err.message || "Failed to send OTP. Please check the number or try later.");
+         setError(err.message || "Failed to send OTP.");
       }
       
       // Reset recaptcha if failed
@@ -162,7 +200,12 @@ const Login: React.FC = () => {
             </button>
         </div>
 
-        {error && <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm text-center mb-6">{error}</div>}
+        {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-md text-sm mb-6 flex items-start gap-2">
+                <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
+                <span>{error}</span>
+            </div>
+        )}
         
         {method === 'email' ? (
             <form className="space-y-6" onSubmit={handleEmailLogin}>
@@ -266,14 +309,22 @@ const Login: React.FC = () => {
                 </div>
             </div>
 
-            <div className="mt-6">
+            <div className="mt-6 grid grid-cols-2 gap-3">
                 <button
                     onClick={handleGoogleLogin}
                     disabled={loading}
-                    className="w-full flex justify-center items-center gap-3 px-4 py-3 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 transition-all"
+                    className="flex justify-center items-center gap-2 px-4 py-3 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 transition-all"
                 >
                     <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="h-5 w-5" />
                     Google
+                </button>
+                <button
+                    onClick={handleGuestLogin}
+                    disabled={loading}
+                    className="flex justify-center items-center gap-2 px-4 py-3 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 transition-all"
+                >
+                    <User className="h-5 w-5 text-gray-500" />
+                    Guest
                 </button>
             </div>
         </div>

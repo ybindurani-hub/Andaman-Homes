@@ -10,6 +10,7 @@ import PropertyDetails from './pages/PropertyDetails';
 import PaymentPage from './pages/PaymentPage';
 import ChatList from './pages/ChatList';
 import ChatScreen from './pages/ChatScreen';
+import MyAds from './pages/MyAds';
 import { auth } from './firebase';
 import { BannerAd } from './components/AdSpaces';
 
@@ -54,6 +55,14 @@ const App: React.FC = () => {
             element={
               <ProtectedRouteManual>
                 <AddProperty />
+              </ProtectedRouteManual>
+            } 
+          />
+          <Route 
+            path="/my-ads" 
+            element={
+              <ProtectedRouteManual>
+                <MyAds />
               </ProtectedRouteManual>
             } 
           />

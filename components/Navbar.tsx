@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { auth } from '../firebase';
 import firebase from 'firebase/compat/app';
-import { Home, Plus, LogOut, User as UserIcon, MessageSquare, Menu, X, Search, Heart } from 'lucide-react';
+import { Home, Plus, LogOut, User as UserIcon, MessageSquare, Menu, X, Search, Heart, List } from 'lucide-react';
 
 const Navbar: React.FC = () => {
   const [user, setUser] = useState<firebase.User | null>(null);
@@ -34,6 +34,13 @@ const Navbar: React.FC = () => {
 
   const isActive = (path: string) => location.pathname === path;
 
+  // Helper to get display name safely
+  const getUserName = () => {
+    if (user?.displayName) return user.displayName;
+    if (user?.email) return user.email.split('@')[0];
+    return 'Guest';
+  };
+
   return (
     <>
       {/* --- DESKTOP TOP NAVIGATION --- */}
@@ -58,6 +65,9 @@ const Navbar: React.FC = () => {
               
               {user ? (
                 <>
+                  <Link to="/my-ads" className="text-gray-600 hover:text-brand-600 px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                    My Listings
+                  </Link>
                   <Link to="/chats" className="text-gray-600 hover:text-brand-600 px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1">
                     <MessageSquare size={18} />
                     Messages
@@ -72,7 +82,7 @@ const Navbar: React.FC = () => {
                   <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-200">
                     <div className="flex items-center gap-1 text-sm text-gray-700 font-medium">
                        <UserIcon size={16} className="text-gray-400" />
-                       {user.email?.split('@')[0]}
+                       {getUserName()}
                     </div>
                     <button 
                       onClick={handleLogoutClick}
@@ -138,11 +148,11 @@ const Navbar: React.FC = () => {
                 <span className="text-[10px] font-bold text-gray-700 mt-1 uppercase">Sell</span>
             </div>
 
-            {/* My Ads (Placeholder or Favorites) */}
-            <button className={`flex flex-col items-center flex-1 py-1 text-gray-500`}>
-                <Heart size={24} />
+            {/* My Ads */}
+            <Link to="/my-ads" className={`flex flex-col items-center flex-1 py-1 ${isActive('/my-ads') ? 'text-brand-600' : 'text-gray-500'}`}>
+                <List size={24} strokeWidth={isActive('/my-ads') ? 2.5 : 2} />
                 <span className="text-[10px] font-medium mt-1">My Ads</span>
-            </button>
+            </Link>
 
             {/* Account */}
             {user ? (

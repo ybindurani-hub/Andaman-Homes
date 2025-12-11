@@ -2,20 +2,21 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Property } from '../types';
-import { MapPin, Heart } from 'lucide-react';
+import { MapPin, Heart, ImageOff, Trash2 } from 'lucide-react';
 import { InterstitialAd } from './AdSpaces';
 
 interface PropertyCardProps {
   property: Property;
+  onDelete?: () => void;
 }
 
-const PropertyCard: React.FC<PropertyCardProps> = ({ property }) => {
+const PropertyCard: React.FC<PropertyCardProps> = ({ property, onDelete }) => {
   const navigate = useNavigate();
   const [showAd, setShowAd] = useState(false);
-
-  const displayImage = property.imageUrls && property.imageUrls.length > 0 
-    ? property.imageUrls[0] 
-    : property.imageUrl;
+  const [imgSrc, setImgSrc] = useState(
+    property.imageUrls && property.imageUrls.length > 0 ? property.imageUrls[0] : property.imageUrl
+  );
+  const [imgError, setImgError] = useState(false);
 
   // Helper to format date relative
   const formatDate = (timestamp: any) => {
@@ -45,6 +46,13 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property }) => {
       navigate(`/property/${property.id}`);
   };
 
+  const handleDeleteClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (onDelete) onDelete();
+  };
+
+  const sqMeters = Math.round(property.area * 0.092903);
+
   return (
     <>
       <InterstitialAd isOpen={showAd} onClose={() => setShowAd(false)} onFinish={handleAdFinish} />
@@ -54,14 +62,33 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property }) => {
         className="bg-white rounded-md border border-gray-200 overflow-hidden shadow-sm active:scale-[0.98] transition-transform flex flex-col h-full cursor-pointer relative"
       >
           {/* Image Section - Compact Height */}
-          <div className="relative h-32 bg-gray-100">
-              <img 
-                  src={displayImage} 
-                  alt={property.title} 
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-              />
+          <div className="relative h-32 bg-gray-100 flex items-center justify-center overflow-hidden">
+              {!imgError ? (
+                  <img 
+                      src={imgSrc} 
+                      alt={property.title} 
+                      className="w-full h-full object-cover transition-opacity duration-300"
+                      loading="lazy"
+                      onError={() => setImgError(true)}
+                  />
+              ) : (
+                  <div className="flex flex-col items-center text-gray-400">
+                      <ImageOff size={24} />
+                      <span className="text-[10px] mt-1">No Image</span>
+                  </div>
+              )}
               
+              {/* Delete Button (Only if onDelete provided) */}
+              {onDelete && (
+                  <button 
+                    className="absolute top-1.5 left-1.5 p-1 bg-white/90 rounded-full text-red-500 hover:bg-red-50 transition-colors shadow-sm z-10"
+                    onClick={handleDeleteClick}
+                    title="Delete Ad"
+                  >
+                      <Trash2 size={14} />
+                  </button>
+              )}
+
               {/* Heart Icon - Smaller */}
               <button className="absolute top-1.5 right-1.5 p-1 bg-white/90 rounded-full text-gray-800 hover:text-red-500 transition-colors shadow-sm z-10" onClick={(e) => e.stopPropagation()}>
                   <Heart size={14} />
@@ -84,8 +111,10 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property }) => {
                   <p className="text-gray-700 text-xs mt-1 line-clamp-1 leading-snug">
                       {property.title}
                   </p>
-                  <div className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-1">
-                       <span>{property.bedrooms} BHK • {property.area} ft²</span>
+                  <div className="text-[10px] text-gray-500 mt-0.5 flex flex-wrap items-center gap-1">
+                       <span>{property.bedrooms} BHK</span>
+                       <span>•</span>
+                       <span>{property.area} ft² <span className="text-gray-400">({sqMeters} m²)</span></span>
                   </div>
               </div>
 

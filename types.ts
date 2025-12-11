@@ -15,7 +15,7 @@ export interface Property {
   // New fields for full functionality
   type: 'rent' | 'sale';
   amenities: string[];
-  contactNumber: string;
+  contactNumber?: string; // Made optional
   // Status for managing lifecycle
   status?: 'active' | 'sold' | 'rented' | 'expired' | 'occupied';
 }

@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
 import { auth, googleProvider } from '../firebase';
 import firebase from 'firebase/compat/app';
 import { useNavigate, Link } from 'react-router-dom';
-import { UserPlus, Loader2, Phone, Mail, KeyRound } from 'lucide-react';
+import { UserPlus, Loader2, Phone, Mail, KeyRound, User, AlertCircle } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -23,15 +24,43 @@ const Signup: React.FC = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
+  // --- Guest Login ---
+  const handleGuestLogin = async () => {
+      setLoading(true);
+      setError('');
+      try {
+          try { await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch(e) {}
+          await auth.signInAnonymously();
+          navigate('/');
+      } catch (err: any) {
+          console.error("Guest Login Error:", err);
+          if (err.code === 'auth/operation-not-supported-in-this-environment') {
+             setError("Guest login not supported in this environment. Use Email/Password.");
+          } else {
+             setError("Failed to sign in as guest.");
+          }
+      } finally {
+          setLoading(false);
+      }
+  };
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
+      try { await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch(e) {}
       await auth.createUserWithEmailAndPassword(email, password);
       navigate('/');
     } catch (err: any) {
-      setError(err.message ? String(err.message) : "Failed to create account");
+      console.error(err);
+      if (err.code === 'auth/email-already-in-use') {
+         setError("This email is already registered. Please login.");
+      } else if (err.code === 'auth/operation-not-supported-in-this-environment') {
+         setError("Signup not supported in this environment. Try Guest Login.");
+      } else {
+         setError(err.message || "Failed to create account.");
+      }
     } finally {
       setLoading(false);
     }
@@ -41,14 +70,17 @@ const Signup: React.FC = () => {
     setLoading(true);
     setError('');
     try {
+      try { await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch(e) {}
       await auth.signInWithPopup(googleProvider);
       navigate('/');
     } catch (err: any) {
       console.error("Google Signup Error:", err);
-      if (err.code === 'auth/operation-not-supported-in-this-environment') {
-        setError("Google Sign-In is not supported in this preview environment. Please use Email/Password.");
+      if (err.code === 'auth/operation-not-supported-in-this-environment' || err.message?.includes('location.protocol')) {
+        setError("Google Sign-In is restricted in this preview environment. Please use Email/Password or Guest Login.");
+      } else if (err.code === 'auth/internal-error') {
+        setError("Internal connection error. Please try Guest Login.");
       } else {
-        setError(err.message || "Google sign-up failed. Please try again.");
+        setError("Google sign-up failed. Try Guest mode.");
       }
     } finally {
         setLoading(false);
@@ -95,11 +127,11 @@ const Signup: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/operation-not-supported-in-this-environment') {
-         setError("Phone Auth is not supported in this preview environment. Please use Email/Password.");
+         setError("Phone Auth not supported in this environment. Use Guest login.");
       } else if (err.code === 'auth/internal-error') {
-         setError("Authentication failed. Ensure the domain is whitelisted in Firebase Console.");
+         setError("Auth Error: Domain not whitelisted. Use Guest login.");
       } else {
-         setError(err.message || "Failed to send OTP. Please check the number or try later.");
+         setError(err.message || "Failed to send OTP.");
       }
 
       if(window.recaptchaVerifier) {
@@ -156,7 +188,12 @@ const Signup: React.FC = () => {
             </button>
         </div>
 
-        {error && <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm text-center mb-4">{error}</div>}
+        {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-md text-sm mb-6 flex items-start gap-2">
+                <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
+                <span>{error}</span>
+            </div>
+        )}
 
         {method === 'email' ? (
             <form className="space-y-6" onSubmit={handleSignup}>
@@ -260,14 +297,22 @@ const Signup: React.FC = () => {
                 </div>
             </div>
 
-            <div className="mt-6">
+            <div className="mt-6 grid grid-cols-2 gap-3">
                 <button
                     onClick={handleGoogleSignup}
                     disabled={loading}
-                    className="w-full flex justify-center items-center gap-3 px-4 py-3 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 transition-all"
+                    className="flex justify-center items-center gap-2 px-4 py-3 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 transition-all"
                 >
                     <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="h-5 w-5" />
                     Google
+                </button>
+                <button
+                    onClick={handleGuestLogin}
+                    disabled={loading}
+                    className="flex justify-center items-center gap-2 px-4 py-3 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 transition-all"
+                >
+                    <User className="h-5 w-5 text-gray-500" />
+                    Guest
                 </button>
             </div>
         </div>

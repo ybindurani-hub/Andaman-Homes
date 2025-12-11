@@ -70,6 +70,8 @@ const AddProperty: React.FC = () => {
   };
 
   const validatePhoneNumber = (phone: string) => {
+    // If empty, it's valid because it's optional
+    if (!phone) return true;
     const regex = /^(\+91|0)?[6-9]\d{9}$/;
     const cleanPhone = phone.replace(/[\s-]/g, '');
     return regex.test(cleanPhone);
@@ -84,12 +86,7 @@ const AddProperty: React.FC = () => {
       return;
     }
     
-    if (!formData.contactNumber) {
-        setPhoneError("Please provide a contact number.");
-        return;
-    }
-
-    if (!validatePhoneNumber(formData.contactNumber)) {
+    if (formData.contactNumber && !validatePhoneNumber(formData.contactNumber)) {
         setPhoneError("Please enter a valid Indian mobile number.");
         return;
     }
@@ -117,7 +114,7 @@ const AddProperty: React.FC = () => {
         bathrooms: Number(formData.bathrooms),
         area: Number(formData.area),
         amenities: formData.amenities,
-        contactNumber: formData.contactNumber,
+        contactNumber: formData.contactNumber, // Optional
         imageUrl: imageUrls[0], 
         imageUrls: imageUrls,   
         ownerId: auth.currentUser.uid,
@@ -354,8 +351,8 @@ const AddProperty: React.FC = () => {
 
               {/* Contact Number */}
               <div className="sm:col-span-6 border-t border-gray-100 pt-6">
-                <label className="block text-sm font-medium text-gray-700">Your Contact Number</label>
-                <p className="text-xs text-gray-500 mb-2">This number will be visible to potential tenants/buyers.</p>
+                <label className="block text-sm font-medium text-gray-700">Your Contact Number (Optional)</label>
+                <p className="text-xs text-gray-500 mb-2">Leave blank if you prefer to be contacted via chat only.</p>
                 <div className="mt-1 relative rounded-md shadow-sm sm:w-1/2">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <Phone className="h-5 w-5 text-gray-400" />
@@ -363,7 +360,6 @@ const AddProperty: React.FC = () => {
                     <input
                         type="tel"
                         name="contactNumber"
-                        required
                         className={`focus:ring-brand-500 focus:border-brand-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 border ${phoneError ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : ''}`}
                         placeholder="+91 90000 00000"
                         value={formData.contactNumber}

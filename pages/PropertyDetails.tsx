@@ -4,7 +4,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebase';
 import firebase from 'firebase/compat/app';
 import { Property } from '../types';
-import { MapPin, BedDouble, Bath, Ruler, CheckCircle, ArrowLeft, Phone, Shield, AlertTriangle, Tag, MessageSquare } from 'lucide-react';
+import { MapPin, BedDouble, Bath, Ruler, CheckCircle, ArrowLeft, Phone, Shield, AlertTriangle, Tag, MessageSquare, ImageOff, Trash2 } from 'lucide-react';
 
 const PropertyDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -14,6 +14,7 @@ const PropertyDetails: React.FC = () => {
   const [activeImage, setActiveImage] = useState<string>('');
   const [allImages, setAllImages] = useState<string[]>([]);
   const [isOwner, setIsOwner] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
     const fetchProperty = async () => {
@@ -30,12 +31,13 @@ const PropertyDetails: React.FC = () => {
             setIsOwner(true);
           }
 
+          // Ensure images array exists
           const images = data.imageUrls && data.imageUrls.length > 0 
             ? data.imageUrls 
-            : [data.imageUrl];
+            : data.imageUrl ? [data.imageUrl] : [];
           
           setAllImages(images);
-          setActiveImage(images[0]);
+          if (images.length > 0) setActiveImage(images[0]);
         } else {
           console.log("No such document!");
         }
@@ -58,6 +60,20 @@ const PropertyDetails: React.FC = () => {
       } catch (error) {
           console.error("Error updating status:", error);
           alert("Failed to update status");
+      }
+  };
+
+  const deleteProperty = async () => {
+      if (!id) return;
+      if (window.confirm("Are you sure you want to delete this listing permanently? This action cannot be undone.")) {
+          try {
+              await db.collection("properties").doc(id).delete();
+              alert("Property deleted successfully.");
+              navigate('/my-ads');
+          } catch (error) {
+              console.error("Error deleting property:", error);
+              alert("Failed to delete property.");
+          }
       }
   };
 
@@ -119,6 +135,7 @@ const PropertyDetails: React.FC = () => {
   }
 
   const isInactive = property.status && property.status !== 'active';
+  const sqMeters = Math.round(property.area * 0.092903);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -165,21 +182,35 @@ const PropertyDetails: React.FC = () => {
                             </button>
                         </>
                     )}
+                    
+                    {/* Delete Button */}
+                    <button onClick={deleteProperty} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 flex items-center gap-2">
+                        <Trash2 size={16} /> Delete Listing
+                    </button>
                 </div>
             </div>
         )}
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden grid grid-cols-1 lg:grid-cols-2">
             {/* Image Side - Improved View */}
-            <div className="bg-black flex flex-col justify-center">
-                <div className="h-[400px] w-full relative">
-                    <img 
-                        src={activeImage} 
-                        alt={property.title} 
-                        className={`w-full h-full object-contain ${isInactive ? 'grayscale opacity-75' : ''}`}
-                    />
+            <div className="bg-black flex flex-col justify-center relative">
+                <div className="h-[400px] w-full flex items-center justify-center bg-gray-900">
+                    {allImages.length > 0 && !imgError ? (
+                        <img 
+                            src={activeImage} 
+                            alt={property.title} 
+                            className={`max-w-full max-h-full object-contain ${isInactive ? 'grayscale opacity-75' : ''}`}
+                            onError={() => setImgError(true)}
+                        />
+                    ) : (
+                        <div className="text-white flex flex-col items-center">
+                            <ImageOff size={48} className="text-gray-600" />
+                            <span className="text-gray-500 mt-2">Image not available</span>
+                        </div>
+                    )}
+                    
                     {isInactive && (
-                        <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="absolute inset-0 flex items-center justify-center z-10">
                             <span className="bg-red-600 text-white text-xl font-bold px-6 py-2 rounded-full transform -rotate-12 shadow-lg border-2 border-white">
                                 {property.status?.toUpperCase()}
                             </span>
@@ -188,11 +219,11 @@ const PropertyDetails: React.FC = () => {
                 </div>
                 {/* Thumbnails */}
                 {allImages.length > 1 && (
-                  <div className="flex gap-2 p-4 overflow-x-auto bg-gray-900 border-t border-gray-800">
+                  <div className="flex gap-2 p-4 overflow-x-auto bg-gray-900 border-t border-gray-800 no-scrollbar">
                     {allImages.map((img, idx) => (
                       <button 
                         key={idx}
-                        onClick={() => setActiveImage(img)}
+                        onClick={() => { setActiveImage(img); setImgError(false); }}
                         className={`flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border-2 transition-all ${activeImage === img ? 'border-brand-500 ring-2 ring-brand-900' : 'border-gray-700 opacity-60 hover:opacity-100'}`}
                       >
                         <img src={img} alt={`View ${idx + 1}`} className="w-full h-full object-cover" />
@@ -232,7 +263,7 @@ const PropertyDetails: React.FC = () => {
                         <div className="bg-gray-50 p-3 rounded-xl text-center border border-gray-100">
                             <Ruler size={24} className="mx-auto text-brand-500 mb-2" />
                             <div className="text-xl font-bold text-gray-900">{property.area}</div>
-                            <div className="text-xs text-gray-500 uppercase tracking-wide">Sq Ft</div>
+                            <div className="text-xs text-gray-500 uppercase tracking-wide">Sq Ft <br/><span className="text-gray-400">({sqMeters} m²)</span></div>
                         </div>
                     </div>
 
@@ -275,7 +306,7 @@ const PropertyDetails: React.FC = () => {
                                     Chat with Owner
                                 </button>
 
-                                {/* Call Button */}
+                                {/* Call Button - Only if number exists */}
                                 {property.contactNumber ? (
                                     <a 
                                         href={`tel:${property.contactNumber}`}
@@ -285,9 +316,9 @@ const PropertyDetails: React.FC = () => {
                                         Call Owner
                                     </a>
                                 ) : (
-                                    <div className="bg-gray-100 text-gray-500 px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 cursor-not-allowed">
+                                    <div className="bg-gray-100 text-gray-500 px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 cursor-not-allowed border border-gray-200">
                                         <Phone size={20} />
-                                        No Number
+                                        Number Hidden
                                     </div>
                                 )}
                             </div>
