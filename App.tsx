@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
@@ -11,103 +11,159 @@ import PaymentPage from './pages/PaymentPage';
 import ChatList from './pages/ChatList';
 import ChatScreen from './pages/ChatScreen';
 import MyAds from './pages/MyAds';
-import { auth } from './firebase';
+import { auth, db } from './firebase';
+import firebase from 'firebase/compat/app';
 import { BannerAd } from './components/AdSpaces';
+import { Loader2 } from 'lucide-react';
 
-// Helper hook for auth state
-function useAuthHook() {
-    const [user, setUser] = React.useState(auth.currentUser);
-    const [loading, setLoading] = React.useState(true);
+// --- HELPER: Ensure Firestore User Exists ---
+export const ensureUserRecord = async (user: firebase.User, additionalData = {}) => {
+  if (!user) return;
+  const userRef = db.collection('users').doc(user.uid);
+  try {
+    const doc = await userRef.get();
+    if (!doc.exists) {
+      await userRef.set({
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName || 'User',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        freeAdsUsed: 0,
+        adsPosted: 0,
+        ...additionalData
+      });
+      console.log("User record created.");
+    }
+  } catch (error) {
+    console.error("Error creating user record:", error);
+  }
+};
 
-    React.useEffect(() => {
-        const unsub = auth.onAuthStateChanged((u) => {
-            setUser(u);
-            setLoading(false);
-        });
-        return unsub;
-    }, []);
-    return { user, loading };
-}
-
-// ScrollToTop Component
+// --- COMPONENT: Scroll To Top ---
 const ScrollToTop = () => {
   const { pathname } = useLocation();
-
-  React.useEffect(() => {
+  useEffect(() => {
     window.scrollTo(0, 0);
   }, [pathname]);
-
   return null;
 };
 
-// Defined outside App to prevent remounting on every render
-const ProtectedRouteManual = ({ children }: React.PropsWithChildren<{}>) => {
-    const { user, loading } = useAuthHook();
-    if (loading) return <div className="h-screen flex items-center justify-center text-brand-600">Loading...</div>;
+// --- COMPONENT: Protected Route (Redirects to Login if NOT authenticated) ---
+const ProtectedRoute = ({ children, user, loading }: { children: React.ReactNode, user: firebase.User | null, loading: boolean }) => {
+    if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-600" /></div>;
     if (!user) return <Navigate to="/login" replace />;
     return <>{children}</>;
 };
 
+// --- COMPONENT: Public Route (Redirects to Home if authenticated) ---
+const PublicRoute = ({ children, user, loading }: { children: React.ReactNode, user: firebase.User | null, loading: boolean }) => {
+    if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-600" /></div>;
+    if (user) return <Navigate to="/" replace />;
+    return <>{children}</>;
+};
+
 const App: React.FC = () => {
+  const [user, setUser] = useState<firebase.User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // 1. Handle Redirect Result (For Android/Mobile Web)
+    // This runs once when the app mounts after a Google Redirect
+    auth.getRedirectResult().then(async (result) => {
+        if (result.user) {
+            await ensureUserRecord(result.user);
+        }
+    }).catch((error) => {
+        console.error("Redirect Auth Error:", error);
+    });
+
+    // 2. Global Auth Listener
+    const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
+      if (currentUser) {
+         // Double check user record exists on any login type
+         // We don't await this to keep UI snappy, it runs in background
+         ensureUserRecord(currentUser); 
+      }
+      setUser(currentUser);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   return (
     <Router>
       <ScrollToTop />
       <div className="min-h-screen bg-gray-50 font-sans text-slate-900 pb-20 md:pb-0">
         <Navbar />
-        
-        {/* Top Banner Ad */}
         <BannerAd position="top" />
 
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
+          
+          {/* Public Routes (Only accessible if logged out) */}
+          <Route 
+            path="/login" 
+            element={
+              <PublicRoute user={user} loading={loading}>
+                <Login />
+              </PublicRoute>
+            } 
+          />
+          <Route 
+            path="/signup" 
+            element={
+              <PublicRoute user={user} loading={loading}>
+                <Signup />
+              </PublicRoute>
+            } 
+          />
+
+          {/* Protected Routes (Only accessible if logged in) */}
           <Route 
             path="/add-property" 
             element={
-              <ProtectedRouteManual>
+              <ProtectedRoute user={user} loading={loading}>
                 <AddProperty />
-              </ProtectedRouteManual>
+              </ProtectedRoute>
             } 
           />
           <Route 
             path="/my-ads" 
             element={
-              <ProtectedRouteManual>
+              <ProtectedRoute user={user} loading={loading}>
                 <MyAds />
-              </ProtectedRouteManual>
+              </ProtectedRoute>
             } 
           />
           <Route 
             path="/payment" 
             element={
-              <ProtectedRouteManual>
+              <ProtectedRoute user={user} loading={loading}>
                 <PaymentPage />
-              </ProtectedRouteManual>
+              </ProtectedRoute>
             } 
           />
-          <Route path="/property/:id" element={<PropertyDetails />} />
-          
-          {/* Chat Routes */}
           <Route 
             path="/chats" 
             element={
-              <ProtectedRouteManual>
+              <ProtectedRoute user={user} loading={loading}>
                 <ChatList />
-              </ProtectedRouteManual>
+              </ProtectedRoute>
             } 
           />
           <Route 
             path="/chat/:chatId" 
             element={
-              <ProtectedRouteManual>
+              <ProtectedRoute user={user} loading={loading}>
                 <ChatScreen />
-              </ProtectedRouteManual>
+              </ProtectedRoute>
             } 
           />
+
+          <Route path="/property/:id" element={<PropertyDetails />} />
         </Routes>
 
-        {/* Bottom Banner Ad */}
         <BannerAd position="bottom" />
       </div>
     </Router>

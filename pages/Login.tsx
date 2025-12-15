@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { auth, googleProvider, db } from '../firebase';
+import { auth, googleProvider } from '../firebase';
 import firebase from 'firebase/compat/app';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Loader2, AlertCircle } from 'lucide-react';
 
 declare global {
@@ -22,86 +22,25 @@ const Login: React.FC = () => {
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const navigate = useNavigate();
 
-  // Clean up Recaptcha on unmount
+  // Clean up Recaptcha
   useEffect(() => {
     return () => {
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-      }
+      if (window.recaptchaVerifier) window.recaptchaVerifier.clear();
     };
   }, []);
 
-  // Handle Google Redirect Result
-  useEffect(() => {
-    const checkRedirect = async () => {
-        try {
-            const result = await auth.getRedirectResult();
-            if (result.user) {
-                // Ensure record exists
-                await ensureUserRecord(result.user);
-                navigate('/', { replace: true });
-            }
-        } catch (err: any) {
-             if (err.code !== 'auth/operation-not-supported-in-this-environment' && err.code !== 'auth/null-user') {
-                console.error("Redirect Auth Error:", err);
-            }
-        }
-    };
-    checkRedirect();
-  }, [navigate]);
-
-  // Helper to ensure user doc exists in Firestore
-  const ensureUserRecord = async (user: firebase.User) => {
-      const userRef = db.collection('users').doc(user.uid);
-      const doc = await userRef.get();
-      if (!doc.exists) {
-          await userRef.set({
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            freeAdsUsed: 0,
-            adsPosted: 0
-         });
-      }
-  };
-
-  const handleEmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    
-    try {
-      await auth.signInWithEmailAndPassword(email, password);
-      navigate('/', { replace: true });
-    } catch (err: any) {
-      console.error("Login Error:", err);
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-         setError("Incorrect email or password.");
-      } else if (err.code === 'auth/too-many-requests') {
-         setError("Too many failed attempts. Reset password or try later.");
-      } else {
-         setError("Failed to sign in. Please check your connection.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // --- HANDLER: Google Login ---
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError('');
     try {
-      const result = await auth.signInWithPopup(googleProvider);
-      if (result.user) {
-          await ensureUserRecord(result.user);
-      }
-      navigate('/', { replace: true });
+      // Try Popup first (Better for Desktop)
+      await auth.signInWithPopup(googleProvider);
+      // NOTE: NO navigate() here. App.tsx detects change and redirects.
     } catch (err: any) {
       console.error("Google Login Error:", err);
-      // Enhanced Error Handling for Environment issues
+      // Fallback to Redirect (Essential for Mobile/WebView)
       const isPopupIssue = 
           err.code === 'auth/popup-blocked' || 
           err.code === 'auth/popup-closed-by-user' || 
@@ -110,18 +49,40 @@ const Login: React.FC = () => {
       if (isPopupIssue) {
           try {
              await auth.signInWithRedirect(googleProvider);
-             return; // Redirecting, so don't stop loading
+             // Return here, page will reload/redirect
+             return; 
           } catch (redirErr: any) {
-             console.error("Redirect Fallback Error:", redirErr);
-             setError("Google Sign-In is not supported in this browser environment. Please try Email/Password.");
+             setError("Google Sign-In not supported in this environment.");
+             setLoading(false);
           }
       } else {
         setError("Google Sign-In failed.");
+        setLoading(false);
+      }
+    }
+  };
+
+  // --- HANDLER: Email Login ---
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      await auth.signInWithEmailAndPassword(email, password);
+    } catch (err: any) {
+      console.error("Login Error:", err);
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+         setError("Incorrect email or password.");
+      } else if (err.code === 'auth/too-many-requests') {
+         setError("Too many failed attempts. Try later.");
+      } else {
+         setError("Failed to sign in.");
       }
       setLoading(false);
     }
   };
 
+  // --- HANDLER: Phone Auth ---
   const setupRecaptcha = () => {
     if (!window.recaptchaVerifier) {
       window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
@@ -162,25 +123,10 @@ const Login: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const result = await confirmationResult.confirm(otp);
-      if (result.user) {
-          // For Phone Auth, we also need to ensure user record exists
-           const userRef = db.collection('users').doc(result.user.uid);
-           const doc = await userRef.get();
-           if (!doc.exists) {
-              await userRef.set({
-                  uid: result.user.uid,
-                  phoneNumber: result.user.phoneNumber,
-                  createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                  freeAdsUsed: 0,
-                  adsPosted: 0
-              });
-           }
-      }
-      navigate('/', { replace: true });
+      await confirmationResult.confirm(otp);
+      // Success: App.tsx will handle routing
     } catch (err: any) {
-      setError("Invalid OTP. Please check and try again.");
-    } finally {
+      setError("Invalid OTP.");
       setLoading(false);
     }
   };
