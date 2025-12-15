@@ -23,7 +23,6 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Clean up Recaptcha
   useEffect(() => {
     return () => {
       if (window.recaptchaVerifier) window.recaptchaVerifier.clear();
@@ -34,32 +33,36 @@ const Login: React.FC = () => {
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError('');
+    
     try {
-      // Try Popup first (Better for Desktop)
+      // Always try Popup first. It is the most reliable method for standard web apps.
       await auth.signInWithPopup(googleProvider);
-      // NOTE: NO navigate() here. App.tsx detects change and redirects.
+      // Success is handled by App.tsx onAuthStateChanged
     } catch (err: any) {
       console.error("Google Login Error:", err);
-      // Fallback to Redirect (Essential for Mobile/WebView)
-      const isPopupIssue = 
-          err.code === 'auth/popup-blocked' || 
-          err.code === 'auth/popup-closed-by-user' || 
-          err.code === 'auth/operation-not-supported-in-this-environment';
+      setLoading(false);
 
-      if (isPopupIssue) {
-          try {
-             await auth.signInWithRedirect(googleProvider);
-             // Return here, page will reload/redirect
-             return; 
-          } catch (redirErr: any) {
-             setError("Google Sign-In not supported in this environment.");
-             setLoading(false);
-          }
+      if (
+          err.code === 'auth/popup-blocked' || 
+          err.code === 'auth/popup-closed-by-user' ||
+          err.code === 'auth/cancelled-popup-request'
+      ) {
+         setError("Popup was blocked or closed. Please try again.");
       } else {
-        setError("Google Sign-In failed.");
-        setLoading(false);
+         setError("Google Sign-In failed. " + err.message);
       }
     }
+  };
+
+  const handleManualRedirect = async () => {
+      setLoading(true);
+      try {
+          await auth.signInWithRedirect(googleProvider);
+      } catch (err: any) {
+          console.error("Redirect Error:", err);
+          setError("Redirect failed: " + err.message);
+          setLoading(false);
+      }
   };
 
   // --- HANDLER: Email Login ---
@@ -71,14 +74,14 @@ const Login: React.FC = () => {
       await auth.signInWithEmailAndPassword(email, password);
     } catch (err: any) {
       console.error("Login Error:", err);
+      setLoading(false);
       if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
          setError("Incorrect email or password.");
       } else if (err.code === 'auth/too-many-requests') {
          setError("Too many failed attempts. Try later.");
       } else {
-         setError("Failed to sign in.");
+         setError("Failed to sign in. " + err.message);
       }
-      setLoading(false);
     }
   };
 
@@ -124,7 +127,6 @@ const Login: React.FC = () => {
     setError('');
     try {
       await confirmationResult.confirm(otp);
-      // Success: App.tsx will handle routing
     } catch (err: any) {
       setError("Invalid OTP.");
       setLoading(false);
@@ -139,7 +141,6 @@ const Login: React.FC = () => {
             <p className="mt-2 text-sm text-gray-500">Sign in to Andaman Homes</p>
         </div>
         
-        {/* Toggle */}
         <div className="bg-gray-100 p-1 rounded-xl flex mb-6">
             <button
                 className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all ${method === 'email' ? 'bg-white text-brand-600 shadow-sm' : 'text-gray-500'}`}
@@ -156,8 +157,15 @@ const Login: React.FC = () => {
         </div>
 
         {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-6 flex items-center gap-2 animate-pulse">
-                <AlertCircle size={16} /> {error}
+            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-6 flex flex-col gap-2 animate-pulse">
+                <div className="flex items-center gap-2">
+                    <AlertCircle size={16} /> {error}
+                </div>
+                {error.includes("Popup") && (
+                    <button onClick={handleManualRedirect} className="text-xs underline font-bold text-red-700 text-left">
+                        Click here to try Redirect Login instead
+                    </button>
+                )}
             </div>
         )}
         

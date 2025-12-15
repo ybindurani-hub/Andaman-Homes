@@ -4,29 +4,27 @@ import "firebase/compat/auth";
 import "firebase/compat/firestore";
 import "firebase/compat/storage";
 
-// Using the provided configuration directly
+// Configuration
+// Double check that 'andaman-homes' matches your exact Firebase Project ID.
 const firebaseConfig = {
   apiKey: "AIzaSyCrJp2FYJeJ5S4cbynYcqG7q15rWoPxcDE",
-  authDomain: "anadaman-homes.firebaseapp.com",
-  projectId: "anadaman-homes",
-  storageBucket: "anadaman-homes.firebasestorage.app",
+  authDomain: "andaman-homes.firebaseapp.com",
+  projectId: "andaman-homes",
+  storageBucket: "andaman-homes.firebasestorage.app",
   messagingSenderId: "563526116422",
   appId: "1:563526116422:web:5a86518ff0b5b6a1dad647"
 };
 
 // Initialize Firebase
-// Check for existing apps to prevent re-initialization errors
 const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
 
-// Export services for use in the app
+// Export services
 export const auth = app.auth();
 export const db = app.firestore();
 export const storage = app.storage();
 export const googleProvider = new firebase.auth.GoogleAuthProvider();
 
-// Explicitly set persistence to LOCAL
-auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch((error) => {
-  console.error("Auth Persistence Error:", error);
-});
+// Default persistence is usually LOCAL, we remove the explicit async call 
+// to avoid unhandled promise rejections during app startup.
 
 export default app;
