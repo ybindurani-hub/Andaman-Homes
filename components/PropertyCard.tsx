@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Property } from '../types';
@@ -95,7 +94,7 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onDelete }) => {
               </button>
 
               {/* Type Badge - Smaller */}
-              {property.type === 'rent' && (
+              {property.category === 'rent' && (
                   <div className="absolute bottom-1 left-1 bg-yellow-400 text-black text-[8px] font-bold px-1.5 py-0.5 rounded shadow-sm uppercase tracking-wide">
                       Rent
                   </div>

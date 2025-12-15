@@ -3,9 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { auth, googleProvider } from '../firebase';
 import firebase from 'firebase/compat/app';
 import { useNavigate, Link } from 'react-router-dom';
-import { LogIn, Phone, Mail, Loader2, KeyRound, User, AlertCircle } from 'lucide-react';
+import { LogIn, Phone, Mail, Loader2, KeyRound, User, AlertCircle, XCircle } from 'lucide-react';
 
-// Extend window to support recaptcha
 declare global {
   interface Window {
     recaptchaVerifier: any;
@@ -25,168 +24,109 @@ const Login: React.FC = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  // Handle Google Redirect Result (For Mobile)
+  // Clean up Recaptcha on unmount
+  useEffect(() => {
+    return () => {
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+      }
+    };
+  }, []);
+
+  // Handle Google Redirect Result
   useEffect(() => {
     const checkRedirect = async () => {
         try {
             const result = await auth.getRedirectResult();
             if (result.user) {
-                navigate('/');
+                navigate('/', { replace: true });
             }
         } catch (err: any) {
-            // Ignore environment errors on load (common in preview/webviews)
-            if (err.code !== 'auth/operation-not-supported-in-this-environment') {
+             if (err.code !== 'auth/operation-not-supported-in-this-environment' && err.code !== 'auth/null-user') {
                 console.error("Redirect Auth Error:", err);
-                setError(err.message || "Authentication failed.");
+                // Don't show error for null user (just means no redirect happened)
             }
         }
     };
     checkRedirect();
   }, [navigate]);
 
-  // --- Guest Login ---
-  const handleGuestLogin = async () => {
-      setLoading(true);
-      setError('');
-      try {
-          try { await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch(e) {}
-          
-          await auth.signInAnonymously();
-          navigate('/');
-      } catch (err: any) {
-          console.error("Guest Login Error:", err);
-          if (err.code === 'auth/operation-not-supported-in-this-environment') {
-             setError("Guest login restricted in this environment. Please try Email/Password.");
-          } else {
-             setError("Failed to sign in as guest.");
-          }
-      } finally {
-          setLoading(false);
-      }
-  };
-
-  // --- Email Login ---
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    
     try {
-      try { await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch(e) {}
-      
       await auth.signInWithEmailAndPassword(email, password);
-      navigate('/');
+      // Success - Navigation handled by App.tsx listener, but we force it for perceived speed
+      navigate('/', { replace: true });
     } catch (err: any) {
-      console.error(err);
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-         setError("Incorrect email or password. Please try again.");
-      } else if (err.code === 'auth/operation-not-supported-in-this-environment') {
-         setError("This environment does not support this login method. Try Guest Login.");
-      } else if (err.code === 'auth/internal-error') {
-         setError("Internal connection error. Please try again later.");
+      console.error("Login Error:", err);
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+         setError("Incorrect email or password.");
+      } else if (err.code === 'auth/too-many-requests') {
+         setError("Too many failed attempts. Reset password or try later.");
       } else {
-         setError(err.message || "Failed to sign in.");
+         setError("Failed to sign in. Please check your connection.");
       }
     } finally {
       setLoading(false);
     }
   };
 
-  // --- Google Login ---
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError('');
     try {
-      try { await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch(e) {}
-
       await auth.signInWithPopup(googleProvider);
-      navigate('/');
+      navigate('/', { replace: true });
     } catch (err: any) {
       console.error("Google Login Error:", err);
-      
-      // Check for environment restrictions first
-      if (err.code === 'auth/operation-not-supported-in-this-environment' || err.message?.includes('location.protocol')) {
-        setError("Google Sign-In is restricted in this environment. Please use Email/Password or Guest Login.");
-        setLoading(false);
-        return;
-      }
-
-      // If popup is blocked or fails on mobile, try redirect (only if env supports it)
-      if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+      if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
+          // Fallback to Redirect
           try {
              await auth.signInWithRedirect(googleProvider);
-             return; 
-          } catch (redirectErr: any) {
-             if (redirectErr.code === 'auth/operation-not-supported-in-this-environment') {
-                 setError("Google Sign-In is restricted here. Use Email or Guest Login.");
-             } else {
-                 setError("Google Sign-In failed.");
-             }
+          } catch (redirErr) {
+             setError("Unable to sign in with Google.");
           }
-      } else if (err.code === 'auth/internal-error') {
-        setError("Internal Error: Google Auth is having trouble. Try Guest Login.");
       } else {
-        setError("Google sign-in failed. Try Guest mode.");
+        setError("Google Sign-In failed.");
       }
     } finally {
       setLoading(false);
     }
   };
 
-  // --- Phone Login Helpers ---
   const setupRecaptcha = () => {
-    try {
-        if (!window.recaptchaVerifier) {
-            window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
-                'size': 'invisible',
-                'callback': () => {
-                // reCAPTCHA solved
-                }
-            });
-        }
-    } catch (err: any) {
-        console.error("Recaptcha Setup Error:", err);
-        throw err;
+    if (!window.recaptchaVerifier) {
+      window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+        'size': 'invisible',
+        'callback': () => {}
+      });
     }
   };
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
-
     const regex = /^[6-9]\d{9}$/;
     if (!regex.test(phoneNumber)) {
-        setError("Please enter a valid 10-digit Indian mobile number.");
-        setLoading(false);
+        setError("Enter a valid 10-digit Indian number.");
         return;
     }
 
+    setLoading(true);
     try {
       setupRecaptcha();
       const appVerifier = window.recaptchaVerifier;
       const formattedNumber = `+91${phoneNumber}`;
-      
       const result = await auth.signInWithPhoneNumber(formattedNumber, appVerifier);
       setConfirmationResult(result);
       setShowOtpInput(true);
     } catch (err: any) {
-      console.error(err);
-      if (err.code === 'auth/operation-not-supported-in-this-environment') {
-         setError("Phone Auth is not supported in this environment. Please use Email or Guest login.");
-      } else if (err.code === 'auth/internal-error') {
-         setError("Auth Error: Domain may not be whitelisted. Use Guest login.");
-      } else if (err.code === 'auth/captcha-check-failed') {
-         setError("Recaptcha verification failed. Please try again.");
-      } else {
-         setError(err.message || "Failed to send OTP.");
-      }
-      
-      if(window.recaptchaVerifier) {
-          try {
-            window.recaptchaVerifier.clear();
-          } catch(e) { }
-          window.recaptchaVerifier = undefined;
-      }
+      console.error("OTP Error:", err);
+      setError("Failed to send OTP. Try again later.");
+      if(window.recaptchaVerifier) window.recaptchaVerifier.clear();
     } finally {
       setLoading(false);
     }
@@ -198,139 +138,106 @@ const Login: React.FC = () => {
     setError('');
     try {
       await confirmationResult.confirm(otp);
-      navigate('/');
+      navigate('/', { replace: true });
     } catch (err: any) {
-      setError("Invalid OTP. Please try again.");
+      setError("Invalid OTP. Please check and try again.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full bg-white p-8 rounded-xl shadow-lg border border-gray-100">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
         <div className="text-center mb-8">
-            <div className="mx-auto bg-brand-100 w-12 h-12 rounded-full flex items-center justify-center mb-4">
-                <LogIn className="text-brand-600 h-6 w-6" />
-            </div>
-            <h2 className="text-3xl font-extrabold text-gray-900">Welcome back</h2>
-            <p className="mt-2 text-sm text-gray-600">
-                Sign in to manage your listings
-            </p>
+            <h2 className="text-3xl font-extrabold text-gray-900">Welcome Back</h2>
+            <p className="mt-2 text-sm text-gray-500">Sign in to Andaman Homes</p>
         </div>
         
-        {/* Method Toggle */}
-        <div className="flex bg-gray-100 p-1 rounded-lg mb-6">
+        {/* Toggle */}
+        <div className="bg-gray-100 p-1 rounded-xl flex mb-6">
             <button
-                type="button"
-                className={`flex-1 flex items-center justify-center py-2 text-sm font-medium rounded-md transition-all ${method === 'email' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all ${method === 'email' ? 'bg-white text-brand-600 shadow-sm' : 'text-gray-500'}`}
                 onClick={() => setMethod('email')}
             >
-                <Mail size={16} className="mr-2" /> Email
+                Email
             </button>
             <button
-                type="button"
-                className={`flex-1 flex items-center justify-center py-2 text-sm font-medium rounded-md transition-all ${method === 'phone' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all ${method === 'phone' ? 'bg-white text-brand-600 shadow-sm' : 'text-gray-500'}`}
                 onClick={() => setMethod('phone')}
             >
-                <Phone size={16} className="mr-2" /> Mobile
+                Phone
             </button>
         </div>
 
         {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-md text-sm mb-6 flex items-start gap-2">
-                <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
-                <span>{error}</span>
+            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-6 flex items-center gap-2 animate-pulse">
+                <AlertCircle size={16} /> {error}
             </div>
         )}
         
         {method === 'email' ? (
-            <form className="space-y-6" onSubmit={handleEmailLogin}>
-                <div className="space-y-4">
-                    <div>
-                        <input
-                            type="email"
-                            required
-                            className="appearance-none relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-brand-500 focus:border-brand-500 sm:text-sm"
-                            placeholder="Email address"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                        />
-                    </div>
-                    <div>
-                        <input
-                            type="password"
-                            required
-                            className="appearance-none relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-brand-500 focus:border-brand-500 sm:text-sm"
-                            placeholder="Password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                        />
-                    </div>
-                </div>
-
+            <form onSubmit={handleEmailLogin} className="space-y-4">
+                <input
+                    type="email"
+                    required
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-all"
+                    placeholder="Email Address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                />
+                <input
+                    type="password"
+                    required
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-all"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                />
                 <button
                     type="submit"
                     disabled={loading}
-                    className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 transition-colors disabled:opacity-70"
+                    className="w-full py-3.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-bold transition-all disabled:opacity-70 flex justify-center items-center"
                 >
-                    {loading ? <Loader2 className="animate-spin h-5 w-5" /> : 'Sign in with Email'}
+                    {loading ? <Loader2 className="animate-spin" /> : 'Login'}
                 </button>
             </form>
         ) : (
-            <div className="space-y-6">
+            <div>
                 <div id="recaptcha-container"></div>
                 {!showOtpInput ? (
                     <form onSubmit={handleSendOtp} className="space-y-4">
-                        <div className="relative rounded-md shadow-sm">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <span className="text-gray-500 sm:text-sm border-r pr-2">+91</span>
-                            </div>
+                        <div className="flex">
+                            <span className="inline-flex items-center px-4 rounded-l-lg border border-r-0 border-gray-200 bg-gray-50 text-gray-500 font-medium">+91</span>
                             <input
                                 type="tel"
                                 required
-                                className="focus:ring-brand-500 focus:border-brand-500 block w-full pl-14 sm:text-sm border-gray-300 rounded-lg py-3 border"
+                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-r-lg focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none"
                                 placeholder="Mobile Number"
                                 value={phoneNumber}
                                 onChange={(e) => setPhoneNumber(e.target.value)}
                                 maxLength={10}
                             />
                         </div>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-brand-600 hover:bg-brand-700 focus:outline-none transition-colors disabled:opacity-70"
-                        >
-                            {loading ? <Loader2 className="animate-spin h-5 w-5" /> : 'Send OTP'}
+                        <button type="submit" disabled={loading} className="w-full py-3.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-bold flex justify-center items-center">
+                             {loading ? <Loader2 className="animate-spin" /> : 'Get OTP'}
                         </button>
                     </form>
                 ) : (
                     <form onSubmit={handleVerifyOtp} className="space-y-4">
-                         <div className="text-sm text-center text-gray-600 mb-2">
-                            Enter OTP sent to +91 {phoneNumber} <br/>
-                            <button type="button" onClick={() => setShowOtpInput(false)} className="text-brand-600 hover:underline text-xs">Change Number</button>
-                        </div>
-                        <div className="relative">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <KeyRound className="h-5 w-5 text-gray-400" />
-                            </div>
-                            <input
-                                type="text"
-                                required
-                                className="focus:ring-brand-500 focus:border-brand-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-lg py-3 border tracking-widest text-center text-lg font-bold"
-                                placeholder="XXXXXX"
-                                value={otp}
-                                onChange={(e) => setOtp(e.target.value)}
-                                maxLength={6}
-                            />
-                        </div>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-brand-600 hover:bg-brand-700 focus:outline-none transition-colors disabled:opacity-70"
-                        >
-                            {loading ? <Loader2 className="animate-spin h-5 w-5" /> : 'Verify OTP'}
+                        <input
+                            type="text"
+                            required
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-center text-2xl tracking-widest font-bold focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none"
+                            placeholder="XXXXXX"
+                            value={otp}
+                            onChange={(e) => setOtp(e.target.value)}
+                            maxLength={6}
+                        />
+                        <button type="submit" disabled={loading} className="w-full py-3.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-bold flex justify-center items-center">
+                             {loading ? <Loader2 className="animate-spin" /> : 'Verify & Login'}
                         </button>
+                        <button type="button" onClick={() => setShowOtpInput(false)} className="w-full text-center text-sm text-gray-500 hover:text-brand-600 mt-2">Change Number</button>
                     </form>
                 )}
             </div>
@@ -338,44 +245,21 @@ const Login: React.FC = () => {
 
         <div className="mt-8">
             <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-300"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-white text-gray-500">Or continue with</span>
-                </div>
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
+                <div className="relative flex justify-center text-sm"><span className="px-2 bg-white text-gray-400">Or continue with</span></div>
             </div>
-
-            <div className="mt-6 grid grid-cols-2 gap-3">
-                <button
-                    type="button"
-                    onClick={handleGoogleLogin}
-                    disabled={loading}
-                    className="flex justify-center items-center gap-2 px-4 py-3 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 transition-all"
-                >
-                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="h-5 w-5" />
-                    Google
-                </button>
-                <button
-                    type="button"
-                    onClick={handleGuestLogin}
-                    disabled={loading}
-                    className="flex justify-center items-center gap-2 px-4 py-3 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 transition-all"
-                >
-                    <User className="h-5 w-5 text-gray-500" />
-                    Guest
-                </button>
-            </div>
+            <button
+                onClick={handleGoogleLogin}
+                className="mt-6 w-full py-3 border border-gray-200 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors font-medium text-gray-700"
+            >
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="h-5 w-5" />
+                Google
+            </button>
         </div>
 
-        <div className="text-center text-sm mt-6">
-            <p className="text-gray-600">
-                Don't have an account?{' '}
-                <Link to="/signup" className="font-medium text-brand-600 hover:text-brand-500">
-                    Sign up free
-                </Link>
-            </p>
-        </div>
+        <p className="text-center text-sm text-gray-600 mt-8">
+            New here? <Link to="/signup" className="font-bold text-brand-600 hover:underline">Create Account</Link>
+        </p>
       </div>
     </div>
   );

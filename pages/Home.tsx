@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { db } from '../firebase';
 import { Property } from '../types';
@@ -78,7 +77,7 @@ const Home: React.FC = () => {
 
     // 2. Type Filter
     if (filterType !== 'all') {
-        result = result.filter(p => p.type === filterType);
+        result = result.filter(p => p.category === filterType);
     }
 
     // 3. Sorting

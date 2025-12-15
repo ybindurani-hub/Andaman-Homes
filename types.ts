@@ -7,16 +7,32 @@ export interface Property {
   price: number;
   imageUrl: string; // Primary thumbnail
   imageUrls?: string[]; // Array of all images
-  bedrooms: number;
-  bathrooms: number;
-  area: number; // in sqft
   ownerId: string;
-  createdAt: any; // Can be number or Firestore Timestamp
-  // New fields for full functionality
-  type: 'rent' | 'sale';
+  createdAt: any; 
+  
+  // Category & Type
+  category: 'rent' | 'sale'; // rent or sale
+  propertyType: 'house' | 'apartment' | 'land' | 'commercial'; // Sub-type
+  
+  // House/Apartment Specifics
+  bedrooms?: number;
+  bathrooms?: number;
+  furnishing?: 'fully' | 'semi' | 'unfurnished';
+  parking?: 'bike' | 'car' | 'both' | 'none';
+  floorNumber?: string; // e.g., "G", "1", "2"
+  totalFloors?: string;
+  
+  // Land Specifics
+  area: number; // Used for Built-up Area (House) or Plot Area (Land) in sqft
+  plotDimensions?: string; // e.g. 30x40
+  facing?: 'north' | 'south' | 'east' | 'west' | 'ne' | 'nw' | 'se' | 'sw';
+  
+  // Metadata
   amenities: string[];
-  contactNumber?: string; // Made optional
-  // Status for managing lifecycle
+  contactNumber?: string;
+  listedBy: 'owner' | 'broker' | 'builder';
+  
+  // Lifecycle
   status?: 'active' | 'sold' | 'rented' | 'expired' | 'occupied';
 }
 
