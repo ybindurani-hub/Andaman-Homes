@@ -68,18 +68,23 @@ const App: React.FC = () => {
 
   useEffect(() => {
     // 1. Handle Redirect Result (For Android/Mobile Web)
-    // This runs once when the app mounts after a Google Redirect.
     // We strictly check for http/https to avoid "operation-not-supported" errors in restricted WebViews.
     const isSupportedProtocol = ['http:', 'https:', 'chrome-extension:'].includes(window.location.protocol);
     
     if (isSupportedProtocol) {
         auth.getRedirectResult().then(async (result) => {
             if (result.user) {
+                console.log("Redirect login successful");
                 await ensureUserRecord(result.user);
             }
         }).catch((error) => {
-            // Suppress environment-specific errors that don't impact functionality in that environment
-            if (error.code !== 'auth/operation-not-supported-in-this-environment') {
+            // Robustly suppress the environment error by checking code AND message
+            const isEnvError = 
+                error.code === 'auth/operation-not-supported-in-this-environment' || 
+                error.message?.includes('operation-not-supported-in-this-environment') ||
+                error.message?.includes('web storage must be enabled');
+
+            if (!isEnvError) {
                 console.error("Redirect Auth Error:", error);
             }
         });
@@ -89,7 +94,6 @@ const App: React.FC = () => {
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
       if (currentUser) {
          // Double check user record exists on any login type
-         // We don't await this to keep UI snappy, it runs in background
          ensureUserRecord(currentUser); 
       }
       setUser(currentUser);
