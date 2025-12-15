@@ -68,14 +68,22 @@ const App: React.FC = () => {
 
   useEffect(() => {
     // 1. Handle Redirect Result (For Android/Mobile Web)
-    // This runs once when the app mounts after a Google Redirect
-    auth.getRedirectResult().then(async (result) => {
-        if (result.user) {
-            await ensureUserRecord(result.user);
-        }
-    }).catch((error) => {
-        console.error("Redirect Auth Error:", error);
-    });
+    // This runs once when the app mounts after a Google Redirect.
+    // We strictly check for http/https to avoid "operation-not-supported" errors in restricted WebViews.
+    const isSupportedProtocol = ['http:', 'https:', 'chrome-extension:'].includes(window.location.protocol);
+    
+    if (isSupportedProtocol) {
+        auth.getRedirectResult().then(async (result) => {
+            if (result.user) {
+                await ensureUserRecord(result.user);
+            }
+        }).catch((error) => {
+            // Suppress environment-specific errors that don't impact functionality in that environment
+            if (error.code !== 'auth/operation-not-supported-in-this-environment') {
+                console.error("Redirect Auth Error:", error);
+            }
+        });
+    }
 
     // 2. Global Auth Listener
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {

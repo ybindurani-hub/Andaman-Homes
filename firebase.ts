@@ -25,8 +25,12 @@ export const storage = app.storage();
 export const googleProvider = new firebase.auth.GoogleAuthProvider();
 
 // Explicitly set persistence to LOCAL
+// We catch the error to prevent crashes in environments like 'file://' or strict WebViews
+// where 'localStorage' might not be available or supported by Firebase.
 auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch((error) => {
-  console.error("Auth Persistence Error:", error);
+  if (error.code !== 'auth/operation-not-supported-in-this-environment') {
+     console.error("Auth Persistence Error:", error);
+  }
 });
 
 export default app;
