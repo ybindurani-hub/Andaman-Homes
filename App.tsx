@@ -49,14 +49,14 @@ const ScrollToTop = () => {
 };
 
 // --- COMPONENT: Protected Route (Redirects to Login if NOT authenticated) ---
-const ProtectedRoute = ({ children, user, loading }: { children: React.ReactNode, user: firebase.User | null, loading: boolean }) => {
+const ProtectedRoute = ({ children, user, loading }: React.PropsWithChildren<{ user: firebase.User | null, loading: boolean }>) => {
     if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-600" /></div>;
     if (!user) return <Navigate to="/login" replace />;
     return <>{children}</>;
 };
 
 // --- COMPONENT: Public Route (Redirects to Home if authenticated) ---
-const PublicRoute = ({ children, user, loading }: { children: React.ReactNode, user: firebase.User | null, loading: boolean }) => {
+const PublicRoute = ({ children, user, loading }: React.PropsWithChildren<{ user: firebase.User | null, loading: boolean }>) => {
     if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-600" /></div>;
     if (user) return <Navigate to="/" replace />;
     return <>{children}</>;

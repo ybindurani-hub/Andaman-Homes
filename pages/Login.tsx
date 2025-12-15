@@ -8,6 +8,7 @@ import { Loader2, AlertCircle } from 'lucide-react';
 declare global {
   interface Window {
     recaptchaVerifier: any;
+    Android?: any;
   }
 }
 
@@ -32,32 +33,40 @@ const Login: React.FC = () => {
 
   // --- HANDLER: Google Login ---
   const handleGoogleLogin = async () => {
+    // 1. Detect Android Wrapper
+    // Google blocks OAuth in embedded WebViews for security. 
+    // We must guide the user to Email/Password in the native app.
+    if (window.Android) {
+        setError("Google Sign-In is not supported in the App. Please use Email/Password.");
+        return;
+    }
+
     setLoading(true);
     setError('');
+    
     try {
-      // Try Popup first (Better for Desktop)
+      // Try Popup first (Best for Desktop)
       await auth.signInWithPopup(googleProvider);
-      // NOTE: NO navigate() here. App.tsx detects change and redirects.
+      // NO navigate() here. App.tsx detects change and redirects.
     } catch (err: any) {
-      console.error("Google Login Error:", err);
-      // Fallback to Redirect (Essential for Mobile/WebView)
-      const isPopupIssue = 
-          err.code === 'auth/popup-blocked' || 
-          err.code === 'auth/popup-closed-by-user' || 
-          err.code === 'auth/operation-not-supported-in-this-environment';
+      console.error("Google Login Popup Error:", err);
+      
+      // If user manually closed the popup, stop here.
+      if (err.code === 'auth/popup-closed-by-user') {
+          setLoading(false);
+          return;
+      }
 
-      if (isPopupIssue) {
-          try {
-             await auth.signInWithRedirect(googleProvider);
-             // Return here, page will reload/redirect
-             return; 
-          } catch (redirErr: any) {
-             setError("Google Sign-In not supported in this environment.");
-             setLoading(false);
-          }
-      } else {
-        setError("Google Sign-In failed.");
-        setLoading(false);
+      // Fallback to Redirect (Essential for Mobile Web)
+      try {
+         await auth.signInWithRedirect(googleProvider);
+         // Return here, page will reload/redirect
+         return; 
+      } catch (redirErr: any) {
+         console.error("Google Login Redirect Error:", redirErr);
+         // Show specific error message (e.g., Domain not authorized)
+         setError(redirErr.message || "Google Sign-In failed. Please try Email/Password.");
+         setLoading(false);
       }
     }
   };

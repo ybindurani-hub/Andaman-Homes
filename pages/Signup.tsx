@@ -14,6 +14,12 @@ const Signup: React.FC = () => {
 
   // --- HANDLER: Google Signup ---
   const handleGoogleSignup = async () => {
+      // 1. Detect Android Wrapper
+      if (window.Android) {
+          setError("Google Sign-In is not supported in the App. Please use Email/Password.");
+          return;
+      }
+
       setLoading(true);
       setError('');
       try {
@@ -21,21 +27,19 @@ const Signup: React.FC = () => {
         // NO navigate() here. App.tsx handles it.
       } catch (err: any) {
          console.error("Google Signup Error:", err);
-         const isPopupIssue = 
-          err.code === 'auth/popup-blocked' || 
-          err.code === 'auth/popup-closed-by-user' || 
-          err.code === 'auth/operation-not-supported-in-this-environment';
          
-         if (isPopupIssue) {
-              try {
-                  await auth.signInWithRedirect(googleProvider);
-                  return;
-              } catch (redirErr: any) {
-                  setError("Google Sign-In is not supported in this environment.");
-                  setLoading(false);
-              }
-         } else {
-             setError("Google Signup failed. Please try again."); 
+         if (err.code === 'auth/popup-closed-by-user') {
+             setLoading(false);
+             return;
+         }
+
+         // Fallback to Redirect
+         try {
+             await auth.signInWithRedirect(googleProvider);
+             return;
+         } catch (redirErr: any) {
+             console.error("Google Signup Redirect Error:", redirErr);
+             setError(redirErr.message || "Google Sign-In failed. Please try Email/Password.");
              setLoading(false);
          }
       }
