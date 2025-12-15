@@ -1,21 +1,16 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { auth, googleProvider } from '../firebase';
 import firebase from 'firebase/compat/app';
-import { Link } from 'react-router-dom';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, Phone, ArrowRight } from 'lucide-react';
 
 declare global {
   interface Window {
     recaptchaVerifier: any;
-    Android?: any;
   }
 }
 
 const Login: React.FC = () => {
-  const [method, setMethod] = useState<'email' | 'phone'>('email');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
   const [showOtpInput, setShowOtpInput] = useState(false);
@@ -23,92 +18,80 @@ const Login: React.FC = () => {
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  const isVerifierInitializing = useRef(false);
 
-  // Clean up Recaptcha
+  // --- 1. Initialize Recaptcha ---
   useEffect(() => {
+    const initRecaptcha = async () => {
+        if (!document.getElementById('recaptcha-container')) return;
+        
+        if (!window.recaptchaVerifier && !isVerifierInitializing.current) {
+            isVerifierInitializing.current = true;
+            try {
+                window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+                    'size': 'invisible',
+                    'callback': () => { /* solved */ },
+                    'expired-callback': () => {
+                        setError("Verification expired. Please try again.");
+                    }
+                });
+            } catch (e) {
+                console.error("Recaptcha Init Error:", e);
+            } finally {
+                isVerifierInitializing.current = false;
+            }
+        }
+    };
+
+    initRecaptcha();
+
     return () => {
-      if (window.recaptchaVerifier) window.recaptchaVerifier.clear();
+        if (window.recaptchaVerifier) {
+            try {
+                window.recaptchaVerifier.clear();
+                window.recaptchaVerifier = null;
+            } catch (e) {}
+        }
     };
   }, []);
 
-  // --- HANDLER: Google Login ---
+  // --- 2. Google Login Handler ---
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError('');
-    
-    // Check if we are in an Android Webview Wrapper
-    const isAndroid = !!window.Android;
 
     try {
-      if (isAndroid) {
-          // In Android WebView, Popups often fail. Use Redirect.
-          // Note: This requires the App to handle the deep link redirect back to the app/webview.
-          await auth.signInWithRedirect(googleProvider);
-          return;
-      }
+        // Detect Environment: Mobile or WebView usually prefers Redirect to avoid popup blocking
+        const ua = navigator.userAgent.toLowerCase();
+        const isMobile = /iphone|ipad|ipod|android/.test(ua);
+        const isWebView = /(wv|version\/[\d.]+)/.test(ua);
 
-      // Try Popup first for Desktop/Standard Mobile Web
-      await auth.signInWithPopup(googleProvider);
-      // NO navigate() here. App.tsx detects change and redirects.
+        if (isMobile || isWebView) {
+            // Use Redirect for Mobile/WebViews
+            // The App.tsx component will handle the result via getRedirectResult
+            await auth.signInWithRedirect(googleProvider);
+        } else {
+            // Use Popup for Desktop Browsers
+            await auth.signInWithPopup(googleProvider);
+            // App.tsx auth listener handles navigation
+        }
     } catch (err: any) {
-      console.error("Google Login Error:", err);
-      
-      // If user manually closed the popup
-      if (err.code === 'auth/popup-closed-by-user') {
-          setLoading(false);
-          return;
-      }
-
-      // If Popup failed (e.g. mobile browser blocking it), try Redirect
-      if (!isAndroid) {
-          try {
-             await auth.signInWithRedirect(googleProvider);
-             return; 
-          } catch (redirErr: any) {
-             console.error("Google Login Redirect Error:", redirErr);
-             setError(redirErr.message || "Google Sign-In failed. Please try Email/Password.");
-             setLoading(false);
-          }
-      } else {
-         setError(err.message || "Login failed in App environment.");
-         setLoading(false);
-      }
+        console.error("Google Login Error:", err);
+        if (err.code === 'auth/popup-closed-by-user') {
+            setLoading(false);
+            return;
+        }
+        setError("Google Sign-In failed. Please try again.");
+        setLoading(false);
     }
   };
 
-  // --- HANDLER: Email Login ---
-  const handleEmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      await auth.signInWithEmailAndPassword(email, password);
-    } catch (err: any) {
-      console.error("Login Error:", err);
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-         setError("Incorrect email or password.");
-      } else if (err.code === 'auth/too-many-requests') {
-         setError("Too many failed attempts. Try later.");
-      } else {
-         setError("Failed to sign in.");
-      }
-      setLoading(false);
-    }
-  };
-
-  // --- HANDLER: Phone Auth ---
-  const setupRecaptcha = () => {
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
-        'size': 'invisible',
-        'callback': () => {}
-      });
-    }
-  };
-
+  // --- 3. Phone OTP Handlers ---
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
     const regex = /^[6-9]\d{9}$/;
     if (!regex.test(phoneNumber)) {
         setError("Enter a valid 10-digit Indian number.");
@@ -117,16 +100,29 @@ const Login: React.FC = () => {
 
     setLoading(true);
     try {
-      setupRecaptcha();
+      if (!window.recaptchaVerifier) {
+           window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+                'size': 'invisible',
+                'callback': () => {}
+           });
+      }
+
       const appVerifier = window.recaptchaVerifier;
       const formattedNumber = `+91${phoneNumber}`;
+      
       const result = await auth.signInWithPhoneNumber(formattedNumber, appVerifier);
       setConfirmationResult(result);
       setShowOtpInput(true);
+      
     } catch (err: any) {
       console.error("OTP Error:", err);
-      setError("Failed to send OTP. Try again later.");
-      if(window.recaptchaVerifier) window.recaptchaVerifier.clear();
+      if (err.code === 'auth/invalid-phone-number') setError("Invalid phone number format.");
+      else if (err.code === 'auth/too-many-requests') setError("Too many attempts. Please try again later.");
+      else if (err.code === 'auth/internal-error') {
+          setError("Network Error. Reloading...");
+          window.location.reload();
+      }
+      else setError("Failed to send OTP.");
     } finally {
       setLoading(false);
     }
@@ -138,35 +134,20 @@ const Login: React.FC = () => {
     setError('');
     try {
       await confirmationResult.confirm(otp);
-      // Success: App.tsx will handle routing
+      // Success handled by App.tsx
     } catch (err: any) {
-      setError("Invalid OTP.");
+      if (err.code === 'auth/invalid-verification-code') setError("Incorrect OTP.");
+      else setError("Verification failed.");
       setLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
-      <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
+      <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-gray-100 relative">
         <div className="text-center mb-8">
-            <h2 className="text-3xl font-extrabold text-gray-900">Welcome Back</h2>
-            <p className="mt-2 text-sm text-gray-500">Sign in to Andaman Homes</p>
-        </div>
-        
-        {/* Toggle */}
-        <div className="bg-gray-100 p-1 rounded-xl flex mb-6">
-            <button
-                className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all ${method === 'email' ? 'bg-white text-brand-600 shadow-sm' : 'text-gray-500'}`}
-                onClick={() => setMethod('email')}
-            >
-                Email
-            </button>
-            <button
-                className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all ${method === 'phone' ? 'bg-white text-brand-600 shadow-sm' : 'text-gray-500'}`}
-                onClick={() => setMethod('phone')}
-            >
-                Phone
-            </button>
+            <h2 className="text-2xl font-extrabold text-gray-900">Welcome</h2>
+            <p className="mt-2 text-sm text-gray-500">Sign in to list or browse properties</p>
         </div>
 
         {error && (
@@ -175,90 +156,95 @@ const Login: React.FC = () => {
             </div>
         )}
         
-        {method === 'email' ? (
-            <form onSubmit={handleEmailLogin} className="space-y-4">
-                <input
-                    type="email"
-                    required
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-all"
-                    placeholder="Email Address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                />
-                <input
-                    type="password"
-                    required
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-all"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                />
-                <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full py-3.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-bold transition-all disabled:opacity-70 flex justify-center items-center shadow-lg shadow-brand-500/30"
+        <div id="recaptcha-container"></div>
+
+        {/* --- Phone Auth Section --- */}
+        {!showOtpInput ? (
+            <form onSubmit={handleSendOtp} className="space-y-6">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Mobile Number</label>
+                    <div className="flex">
+                        <span className="inline-flex items-center px-4 rounded-l-lg border border-r-0 border-gray-200 bg-gray-50 text-gray-500 font-medium select-none">+91</span>
+                        <input
+                            type="tel"
+                            required
+                            className="w-full px-4 py-3 bg-white border border-gray-200 rounded-r-lg focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-all font-medium text-gray-900"
+                            placeholder="Enter 10-digit number"
+                            value={phoneNumber}
+                            onChange={(e) => {
+                                const val = e.target.value.replace(/\D/g, '');
+                                if (val.length <= 10) setPhoneNumber(val);
+                            }}
+                        />
+                    </div>
+                </div>
+                
+                <button 
+                    type="submit" 
+                    disabled={loading || phoneNumber.length < 10} 
+                    className="w-full py-3.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-bold flex justify-center items-center shadow-lg shadow-brand-500/30 transition-all disabled:opacity-70 disabled:shadow-none"
                 >
-                    {loading ? <Loader2 className="animate-spin" /> : 'Login'}
+                     {loading ? <Loader2 className="animate-spin" /> : 'Get OTP'}
                 </button>
             </form>
         ) : (
-            <div>
-                <div id="recaptcha-container"></div>
-                {!showOtpInput ? (
-                    <form onSubmit={handleSendOtp} className="space-y-4">
-                        <div className="flex">
-                            <span className="inline-flex items-center px-4 rounded-l-lg border border-r-0 border-gray-200 bg-gray-50 text-gray-500 font-medium">+91</span>
-                            <input
-                                type="tel"
-                                required
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-r-lg focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none"
-                                placeholder="Mobile Number"
-                                value={phoneNumber}
-                                onChange={(e) => setPhoneNumber(e.target.value)}
-                                maxLength={10}
-                            />
-                        </div>
-                        <button type="submit" disabled={loading} className="w-full py-3.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-bold flex justify-center items-center">
-                             {loading ? <Loader2 className="animate-spin" /> : 'Get OTP'}
+            <form onSubmit={handleVerifyOtp} className="space-y-6">
+                <div>
+                    <div className="flex justify-between items-center mb-2">
+                        <label className="block text-sm font-medium text-gray-700">Enter OTP</label>
+                        <button 
+                            type="button" 
+                            onClick={() => { setShowOtpInput(false); setOtp(''); setError(''); }} 
+                            className="text-xs text-brand-600 hover:underline font-medium"
+                        >
+                            Change Number
                         </button>
-                    </form>
-                ) : (
-                    <form onSubmit={handleVerifyOtp} className="space-y-4">
-                        <input
-                            type="text"
-                            required
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-center text-2xl tracking-widest font-bold focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none"
-                            placeholder="XXXXXX"
-                            value={otp}
-                            onChange={(e) => setOtp(e.target.value)}
-                            maxLength={6}
-                        />
-                        <button type="submit" disabled={loading} className="w-full py-3.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-bold flex justify-center items-center">
-                             {loading ? <Loader2 className="animate-spin" /> : 'Verify & Login'}
-                        </button>
-                        <button type="button" onClick={() => setShowOtpInput(false)} className="w-full text-center text-sm text-gray-500 hover:text-brand-600 mt-2">Change Number</button>
-                    </form>
-                )}
-            </div>
+                    </div>
+                    <input
+                        type="text"
+                        required
+                        className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-center text-2xl tracking-[0.5em] font-bold focus:ring-2 focus:ring-brand-500 outline-none transition-all text-gray-900"
+                        placeholder="••••••"
+                        value={otp}
+                        onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '');
+                            if (val.length <= 6) setOtp(val);
+                        }}
+                        maxLength={6}
+                        autoFocus
+                    />
+                </div>
+
+                <button 
+                    type="submit" 
+                    disabled={loading || otp.length < 6} 
+                    className="w-full py-3.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-bold flex justify-center items-center shadow-lg shadow-brand-500/30 transition-all disabled:opacity-70 disabled:shadow-none gap-2"
+                >
+                     {loading ? <Loader2 className="animate-spin" /> : <>Verify & Login <ArrowRight size={18} /></>}
+                </button>
+            </form>
         )}
 
-        <div className="mt-8">
-            <div className="relative">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
-                <div className="relative flex justify-center text-sm"><span className="px-2 bg-white text-gray-400">Or continue with</span></div>
-            </div>
-            <button
-                onClick={handleGoogleLogin}
-                className="mt-6 w-full py-3 border border-gray-200 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors font-medium text-gray-700"
-            >
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="h-5 w-5" />
-                Google
-            </button>
+        {/* --- Divider --- */}
+        <div className="relative mt-8">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
+            <div className="relative flex justify-center text-sm"><span className="px-3 bg-white text-gray-500">Or continue with</span></div>
         </div>
 
-        <p className="text-center text-sm text-gray-600 mt-8">
-            New here? <Link to="/signup" className="font-bold text-brand-600 hover:underline">Create Account</Link>
-        </p>
+        {/* --- Google Auth Button --- */}
+        <button
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            className="mt-6 w-full py-3 border border-gray-200 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors font-medium text-gray-700"
+        >
+            {loading && !showOtpInput ? <Loader2 className="animate-spin h-5 w-5" /> : (
+                <>
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="h-5 w-5" />
+                    Google
+                </>
+            )}
+        </button>
+
       </div>
     </div>
   );

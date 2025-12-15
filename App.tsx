@@ -4,7 +4,6 @@ import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'reac
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Login from './pages/Login';
-import Signup from './pages/Signup';
 import AddProperty from './pages/AddProperty';
 import PropertyDetails from './pages/PropertyDetails';
 import PaymentPage from './pages/PaymentPage';
@@ -17,6 +16,7 @@ import { BannerAd } from './components/AdSpaces';
 import { Loader2 } from 'lucide-react';
 
 // --- HELPER: Ensure Firestore User Exists ---
+// Handles both Phone users (no email/photo usually) and Google users (email/photo available)
 export const ensureUserRecord = async (user: firebase.User, additionalData = {}) => {
   if (!user) return;
   const userRef = db.collection('users').doc(user.uid);
@@ -25,8 +25,10 @@ export const ensureUserRecord = async (user: firebase.User, additionalData = {})
     if (!doc.exists) {
       await userRef.set({
         uid: user.uid,
-        email: user.email,
+        email: user.email || null,
+        phoneNumber: user.phoneNumber || null,
         displayName: user.displayName || 'User',
+        photoURL: user.photoURL || null,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         freeAdsUsed: 0,
         adsPosted: 0,
@@ -67,34 +69,29 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Handle Redirect Result (For Android/Mobile Web)
-    // We strictly check for http/https to avoid "operation-not-supported" errors in restricted WebViews.
-    const isSupportedProtocol = ['http:', 'https:', 'chrome-extension:'].includes(window.location.protocol);
-    
-    if (isSupportedProtocol) {
-        auth.getRedirectResult().then(async (result) => {
-            if (result.user) {
-                console.log("Redirect login successful");
-                await ensureUserRecord(result.user);
-            }
-        }).catch((error) => {
-            // Robustly suppress the environment error by checking code AND message
-            const isEnvError = 
-                error.code === 'auth/operation-not-supported-in-this-environment' || 
-                error.message?.includes('operation-not-supported-in-this-environment') ||
-                error.message?.includes('web storage must be enabled');
+    // 1. Handle Redirect Result (Critical for Mobile WebView Google Login)
+    auth.getRedirectResult().then(async (result) => {
+        if (result.user) {
+            console.log("Redirect login successful");
+            await ensureUserRecord(result.user);
+            // No need to manually navigate; onAuthStateChanged will trigger and update state
+        }
+    }).catch((error) => {
+        // Suppress common environment errors in non-supported browsers
+        const isEnvError = 
+            error.code === 'auth/operation-not-supported-in-this-environment' || 
+            error.message?.includes('operation-not-supported') ||
+            error.message?.includes('web storage');
 
-            if (!isEnvError) {
-                console.error("Redirect Auth Error:", error);
-            }
-        });
-    }
+        if (!isEnvError) {
+            console.error("Redirect Auth Error:", error);
+        }
+    });
 
     // 2. Global Auth Listener
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
       if (currentUser) {
-         // Double check user record exists on any login type
-         ensureUserRecord(currentUser); 
+         await ensureUserRecord(currentUser); 
       }
       setUser(currentUser);
       setLoading(false);
@@ -119,14 +116,6 @@ const App: React.FC = () => {
             element={
               <PublicRoute user={user} loading={loading}>
                 <Login />
-              </PublicRoute>
-            } 
-          />
-          <Route 
-            path="/signup" 
-            element={
-              <PublicRoute user={user} loading={loading}>
-                <Signup />
               </PublicRoute>
             } 
           />

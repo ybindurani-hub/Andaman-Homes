@@ -5,6 +5,12 @@ import firebase from 'firebase/compat/app';
 import { Link } from 'react-router-dom';
 import { Loader2, AlertCircle, User, Mail, Lock } from 'lucide-react';
 
+declare global {
+  interface Window {
+    Android?: any;
+  }
+}
+
 const Signup: React.FC = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
