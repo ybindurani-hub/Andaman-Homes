@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { auth, googleProvider, db } from '../firebase';
 import firebase from 'firebase/compat/app';
 import { useNavigate, Link } from 'react-router-dom';
@@ -12,6 +12,40 @@ const Signup: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+
+  // Handle Google Redirect Result (Critical for Mobile/WebView)
+  useEffect(() => {
+    const checkRedirect = async () => {
+        try {
+            const result = await auth.getRedirectResult();
+            if (result.user) {
+                 const user = result.user;
+                 // Check if user doc exists, if not create it
+                 const userDocRef = db.collection('users').doc(user.uid);
+                 const doc = await userDocRef.get();
+                 
+                 if (!doc.exists) {
+                     await userDocRef.set({
+                        uid: user.uid,
+                        email: user.email,
+                        displayName: user.displayName || name || 'User', // Fallback name
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        freeAdsUsed: 0,
+                        adsPosted: 0
+                     });
+                 }
+                navigate('/', { replace: true });
+            }
+        } catch (err: any) {
+             console.error("Redirect Auth Error:", err);
+             if (err.code !== 'auth/operation-not-supported-in-this-environment' && err.code !== 'auth/null-user') {
+                // Only show relevant errors
+                setError("Google Sign-In failed via redirect. Please try again.");
+            }
+        }
+    };
+    checkRedirect();
+  }, [navigate, name]);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
