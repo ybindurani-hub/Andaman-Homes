@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { auth, googleProvider } from '../firebase';
+import { auth, googleProvider, db } from '../firebase';
 import firebase from 'firebase/compat/app';
 import { useNavigate, Link } from 'react-router-dom';
-import { LogIn, Phone, Mail, Loader2, KeyRound, User, AlertCircle, XCircle } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -39,17 +39,34 @@ const Login: React.FC = () => {
         try {
             const result = await auth.getRedirectResult();
             if (result.user) {
+                // Ensure record exists
+                await ensureUserRecord(result.user);
                 navigate('/', { replace: true });
             }
         } catch (err: any) {
              if (err.code !== 'auth/operation-not-supported-in-this-environment' && err.code !== 'auth/null-user') {
                 console.error("Redirect Auth Error:", err);
-                // Don't show error for null user (just means no redirect happened)
             }
         }
     };
     checkRedirect();
   }, [navigate]);
+
+  // Helper to ensure user doc exists in Firestore
+  const ensureUserRecord = async (user: firebase.User) => {
+      const userRef = db.collection('users').doc(user.uid);
+      const doc = await userRef.get();
+      if (!doc.exists) {
+          await userRef.set({
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            freeAdsUsed: 0,
+            adsPosted: 0
+         });
+      }
+  };
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +75,8 @@ const Login: React.FC = () => {
     
     try {
       await auth.signInWithEmailAndPassword(email, password);
-      // Success - Navigation handled by App.tsx listener, but we force it for perceived speed
+      // No need to create doc for email login, as signup handles it. 
+      // But for legacy compatibility, we could check, but let's assume signup flow is used.
       navigate('/', { replace: true });
     } catch (err: any) {
       console.error("Login Error:", err);
@@ -78,12 +96,14 @@ const Login: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      await auth.signInWithPopup(googleProvider);
+      const result = await auth.signInWithPopup(googleProvider);
+      if (result.user) {
+          await ensureUserRecord(result.user);
+      }
       navigate('/', { replace: true });
     } catch (err: any) {
       console.error("Google Login Error:", err);
       if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
-          // Fallback to Redirect
           try {
              await auth.signInWithRedirect(googleProvider);
           } catch (redirErr) {
@@ -137,7 +157,22 @@ const Login: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      await confirmationResult.confirm(otp);
+      const result = await confirmationResult.confirm(otp);
+      if (result.user) {
+          // For Phone Auth, we also need to ensure user record exists
+          // Since we don't have email/name, we create a basic record
+           const userRef = db.collection('users').doc(result.user.uid);
+           const doc = await userRef.get();
+           if (!doc.exists) {
+              await userRef.set({
+                  uid: result.user.uid,
+                  phoneNumber: result.user.phoneNumber,
+                  createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                  freeAdsUsed: 0,
+                  adsPosted: 0
+              });
+           }
+      }
       navigate('/', { replace: true });
     } catch (err: any) {
       setError("Invalid OTP. Please check and try again.");
@@ -147,7 +182,7 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
       <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
         <div className="text-center mb-8">
             <h2 className="text-3xl font-extrabold text-gray-900">Welcome Back</h2>
@@ -197,7 +232,7 @@ const Login: React.FC = () => {
                 <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-3.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-bold transition-all disabled:opacity-70 flex justify-center items-center"
+                    className="w-full py-3.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-bold transition-all disabled:opacity-70 flex justify-center items-center shadow-lg shadow-brand-500/30"
                 >
                     {loading ? <Loader2 className="animate-spin" /> : 'Login'}
                 </button>

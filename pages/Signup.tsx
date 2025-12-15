@@ -1,11 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
-import { auth, googleProvider } from '../firebase';
+import React, { useState } from 'react';
+import { auth, googleProvider, db } from '../firebase';
 import firebase from 'firebase/compat/app';
 import { useNavigate, Link } from 'react-router-dom';
-import { UserPlus, Loader2, Phone, Mail, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, User, Mail, Lock } from 'lucide-react';
 
 const Signup: React.FC = () => {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,12 +25,35 @@ const Signup: React.FC = () => {
     }
 
     try {
-      await auth.createUserWithEmailAndPassword(email, password);
+      // 1. Create Authentication User
+      const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+      const user = userCredential.user;
+
+      if (user) {
+        // 2. Update Auth Profile
+        await user.updateProfile({
+            displayName: name
+        });
+
+        // 3. Create Firestore User Document
+        // This is crucial for other parts of the app to work (like AddProperty)
+        await db.collection('users').doc(user.uid).set({
+            uid: user.uid,
+            email: email,
+            displayName: name,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            freeAdsUsed: 0,
+            adsPosted: 0
+        });
+      }
+
       navigate('/', { replace: true });
     } catch (err: any) {
-      console.error(err);
+      console.error("Signup Error:", err);
       if (err.code === 'auth/email-already-in-use') {
          setError("Email already registered. Please Login.");
+      } else if (err.code === 'auth/invalid-email') {
+         setError("Please enter a valid email address.");
       } else {
          setError("Signup failed. Please try again.");
       }
@@ -39,52 +63,90 @@ const Signup: React.FC = () => {
   };
 
   const handleGoogleSignup = async () => {
-      // Re-use logic for simplicity
       try {
         setLoading(true);
-        await auth.signInWithPopup(googleProvider);
+        const result = await auth.signInWithPopup(googleProvider);
+        const user = result.user;
+
+        if (user) {
+             // Check if user doc exists, if not create it
+             const userDocRef = db.collection('users').doc(user.uid);
+             const doc = await userDocRef.get();
+             
+             if (!doc.exists) {
+                 await userDocRef.set({
+                    uid: user.uid,
+                    email: user.email,
+                    displayName: user.displayName || name,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    freeAdsUsed: 0,
+                    adsPosted: 0
+                 });
+             }
+        }
         navigate('/', { replace: true });
       } catch (e: any) {
-         setError("Google Signup failed."); 
+         console.error("Google Signup Error:", e);
+         setError("Google Signup failed. Please try again."); 
          setLoading(false);
       }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
       <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
         <div className="text-center mb-8">
             <h2 className="text-3xl font-extrabold text-gray-900">Create Account</h2>
-            <p className="mt-2 text-sm text-gray-500">Join Andaman Homes today</p>
+            <p className="mt-2 text-sm text-gray-500">Join Andaman Homes to buy & sell property</p>
         </div>
 
         {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-6 flex items-center gap-2">
+            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-6 flex items-center gap-2 animate-pulse">
                 <AlertCircle size={16} /> {error}
             </div>
         )}
 
         <form onSubmit={handleSignup} className="space-y-4">
-            <input
-                type="email"
-                required
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-all"
-                placeholder="Email Address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-            />
-            <input
-                type="password"
-                required
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-all"
-                placeholder="Password (Min 6 chars)"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-            />
+            <div className="relative">
+                <User className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                <input
+                    type="text"
+                    required
+                    className="w-full pl-10 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-all"
+                    placeholder="Full Name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                />
+            </div>
+
+            <div className="relative">
+                <Mail className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                <input
+                    type="email"
+                    required
+                    className="w-full pl-10 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-all"
+                    placeholder="Email Address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                />
+            </div>
+
+            <div className="relative">
+                <Lock className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                <input
+                    type="password"
+                    required
+                    className="w-full pl-10 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition-all"
+                    placeholder="Password (Min 6 chars)"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                />
+            </div>
+
             <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-bold transition-all disabled:opacity-70 flex justify-center items-center"
+                className="w-full py-3.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-bold transition-all disabled:opacity-70 flex justify-center items-center shadow-lg shadow-brand-500/30"
             >
                 {loading ? <Loader2 className="animate-spin" /> : 'Sign Up'}
             </button>
