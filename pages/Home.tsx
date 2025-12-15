@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { db } from '../firebase';
 import { Property } from '../types';
@@ -19,12 +18,7 @@ const Home: React.FC = () => {
   useEffect(() => {
     const fetchProperties = async () => {
       try {
-        // Fetch all active properties
-        // We remove .orderBy("createdAt", "desc") here to avoid needing a composite index
-        // if we were to combine it with other filters in the future.
-        // We will sort client-side.
-        const querySnapshot = await db.collection("properties").get();
-        
+        const querySnapshot = await db.collection("properties").orderBy("createdAt", "desc").get();
         const props: Property[] = [];
         const batch = db.batch();
         let hasExpiredUpdates = false;
@@ -40,12 +34,9 @@ const Home: React.FC = () => {
                  createdAtMillis = data.createdAt;
              } else if (data.createdAt.toMillis) {
                  createdAtMillis = data.createdAt.toMillis();
-             } else if (data.createdAt instanceof Date) {
-                 createdAtMillis = data.createdAt.getTime();
              }
           }
 
-          // Check expiry
           if (data.status !== 'expired' && createdAtMillis > 0 && (now - createdAtMillis > THIRTY_DAYS_MS)) {
              const docRef = db.collection("properties").doc(doc.id);
              batch.update(docRef, { status: 'expired' });
@@ -58,17 +49,6 @@ const Home: React.FC = () => {
         if (hasExpiredUpdates) {
             await batch.commit();
         }
-
-        // Sort by Newest initially (Client-side)
-        props.sort((a, b) => {
-             const getMillis = (item: Property) => {
-                if (!item.createdAt) return 0;
-                if (typeof item.createdAt.toMillis === 'function') return item.createdAt.toMillis();
-                if (item.createdAt instanceof Date) return item.createdAt.getTime();
-                return 0;
-            };
-            return getMillis(b) - getMillis(a);
-        });
 
         setProperties(props);
         setFilteredProperties(props);
@@ -106,15 +86,7 @@ const Home: React.FC = () => {
     } else if (sortBy === 'priceHigh') {
         result.sort((a, b) => b.price - a.price);
     } else {
-         // Newest
-         result.sort((a, b) => {
-             const getMillis = (item: Property) => {
-                if (!item.createdAt) return 0;
-                if (typeof item.createdAt.toMillis === 'function') return item.createdAt.toMillis();
-                return 0;
-            };
-            return getMillis(b) - getMillis(a);
-        });
+        // Default newest
     }
 
     setFilteredProperties(result);

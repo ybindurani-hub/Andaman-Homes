@@ -1,26 +1,38 @@
 
 import React, { useEffect, useState } from 'react';
-import { X, ExternalLink, Megaphone } from 'lucide-react';
+import { Info, ExternalLink } from 'lucide-react';
 
 // ============================================================================
-//  GOOGLE ADMOB CONFIGURATION
+//  GOOGLE ADMOB CONFIGURATION (FOR ANDROID APP)
+//  Paste your AdMob Unit Keys here.
 // ============================================================================
 
+// 1. Enable Ads
 const ENABLE_ADS = true;
 
-// Ad Unit IDs (Test IDs)
+// 2. AdMob App ID (For reference, put this in your AndroidManifest.xml)
+// TEST APP ID: ca-app-pub-3940256099942544~3347511713
+
+// 3. Ad Unit IDs (Google AdMob Test IDs provided)
 const BANNER_TOP_ID =  "ca-app-pub-3940256099942544/6300978111";      
 const BANNER_BOTTOM_ID =  "ca-app-pub-3940256099942544/6300978111";   
-const INTERSTITIAL_ID =  "ca-app-pub-3940256099942544/8691691433";  
-const NATIVE_ID = "ca-app-pub-3940256099942544/2247696110";
+const INTERSTITIAL_ID =  "ca-app-pub-3940256099942544/8691691433"; // Interstitial Video Test ID     
+const NATIVE_ID = "ca-app-pub-3940256099942544/2247696110"; // Native Advanced Video / MREC
 
-// --- HELPER: Trigger Android AdMob Bridge ---
-const triggerAndroidAd = (type: 'banner' | 'interstitial' | 'native', unitId: string, position?: string) => {
+// ============================================================================
+
+/**
+ * Helper to communicate with Android Native Code
+ * This assumes your Android WebView has:
+ * webView.addJavascriptInterface(new WebAppInterface(this), "Android");
+ */
+const triggerNativeAd = (type: 'banner' | 'interstitial' | 'native', unitId: string, position?: string) => {
     try {
         // @ts-ignore
         if (window.Android && window.Android.showAdMob) {
             // @ts-ignore
             window.Android.showAdMob(type, unitId, position || "");
+            console.log(`Called Native Android: ${type} - ${unitId}`);
             return true;
         }
     } catch (e) {
@@ -29,127 +41,143 @@ const triggerAndroidAd = (type: 'banner' | 'interstitial' | 'native', unitId: st
     return false;
 };
 
-// --- COMPONENT: Banner Ad ---
+
+// --- Banner Ad Component ---
 export const BannerAd: React.FC<{ position: 'top' | 'bottom' }> = ({ position }) => {
   const [isNative, setIsNative] = useState(false);
+  const unitId = position === 'top' ? BANNER_TOP_ID : BANNER_BOTTOM_ID;
 
   useEffect(() => {
-    if (!ENABLE_ADS) return;
-    // Attempt to call Android Bridge
-    const success = triggerAndroidAd('banner', position === 'top' ? BANNER_TOP_ID : BANNER_BOTTOM_ID, position);
-    if (success) setIsNative(true);
-  }, [position]);
+      if (ENABLE_ADS) {
+          // Attempt to load real ad via Native Bridge
+          const success = triggerNativeAd('banner', unitId, position);
+          setIsNative(success);
+      }
+  }, [position, unitId]);
 
   if (!ENABLE_ADS) return null;
 
-  // 1. Native App View (Invisible placeholder, ad overlays this area)
+  // If we are running in the actual Android App with the Bridge, 
+  // we render a transparent spacer so the Native Ad Overlay doesn't hide content.
   if (isNative) {
-      return <div className="h-0.5 bg-transparent w-full"></div>; 
+      return <div style={{ width: '100%', height: '50px' }} />; 
   }
 
-  // 2. Web/Browser View (Visual Placeholder)
+  // --- BROWSER PLACEHOLDER (TEST MODE) ---
   return (
-    <div className={`w-full bg-gray-100 border-y border-gray-300 flex flex-col items-center justify-center py-3 ${position === 'bottom' ? 'fixed bottom-0 z-50 md:relative' : ''}`}>
-         <span className="text-[10px] font-bold text-gray-400 border border-gray-300 px-1 rounded uppercase mb-1">AdMob Banner ({position})</span>
-         <span className="text-xs text-gray-500 font-medium flex items-center gap-1">
-            <Megaphone size={12} /> Advertisement Space
-         </span>
+    <div className={`w-full bg-gray-100 border-y border-gray-300 flex items-center justify-center ${position === 'bottom' ? 'mb-[65px] md:mb-0' : ''}`}>
+      <div className="w-full max-w-[320px] h-[50px] bg-gray-300 flex flex-col items-center justify-center relative overflow-hidden">
+        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">AdMob Banner</span>
+        <span className="text-[8px] text-gray-400">{unitId}</span>
+        <div className="absolute top-0 right-0 bg-yellow-400 text-[8px] px-1 font-bold text-black">TEST MODE</div>
+      </div>
     </div>
   );
 };
 
-// --- COMPONENT: Native Ad (In-Feed) ---
+
+// --- Native / MREC Ad Component ---
+// AdMob Native ads are complex in WebView. We usually use a "Medium Rectangle" (300x250) banner here.
 export const NativeAd: React.FC = () => {
   const [isNative, setIsNative] = useState(false);
 
   useEffect(() => {
-    if (!ENABLE_ADS) return;
-    const success = triggerAndroidAd('native', NATIVE_ID);
-    if (success) setIsNative(true);
+      if (ENABLE_ADS) {
+          const success = triggerNativeAd('native', NATIVE_ID);
+          setIsNative(success);
+      }
   }, []);
 
-  if (!ENABLE_ADS) return null;
-
-  if (isNative) {
-      return <div id="native-ad-container" className="min-h-[1px]"></div>;
-  }
-
-  // Web Placeholder for Native Ad
-  return (
-    <div className="bg-white border border-gray-200 rounded-lg p-3 my-2 shadow-sm">
-        <div className="flex items-start gap-3">
-             <div className="w-20 h-20 bg-gray-100 rounded-md flex-shrink-0 flex items-center justify-center text-gray-400">
-                <span className="text-[10px]">Ad Image</span>
-             </div>
-             <div className="flex-1">
-                 <div className="flex items-center gap-2 mb-1">
-                     <span className="bg-yellow-500 text-white text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">Ad</span>
-                     <span className="text-xs text-gray-500">Sponsored</span>
-                 </div>
-                 <h4 className="font-bold text-gray-800 text-sm">Relevant Property Service</h4>
-                 <p className="text-xs text-gray-500 mt-1 line-clamp-2">Looking for movers and packers? Get the best deals today.</p>
-                 <button className="mt-2 text-brand-600 text-xs font-bold uppercase">Learn More</button>
-             </div>
-        </div>
+  // Placeholder UI matching your app design
+  const PlaceholderUI = () => (
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col h-full min-h-[250px] relative">
+      <div className="bg-gray-100 flex-1 flex flex-col items-center justify-center p-4 text-center">
+         <Info className="text-gray-300 h-10 w-10 mb-2" />
+         <h4 className="font-bold text-gray-800 text-sm">AdMob Native / MREC</h4>
+         <p className="text-xs text-gray-500 mt-1 break-all px-4">{NATIVE_ID}</p>
+         <button className="mt-3 text-xs bg-blue-600 text-white py-2 px-4 rounded-md font-medium">
+            Install App
+         </button>
+      </div>
+      <div className="absolute top-2 left-2 bg-yellow-400 text-black text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">AD</div>
     </div>
   );
+
+  if (!ENABLE_ADS) return null;
+  
+  // If Native Bridge is active, we just reserve space. 
+  // The Android app should inject a View here or overlay it.
+  if (isNative) {
+      return <div className="w-full h-[250px] bg-transparent" />; 
+  }
+
+  return <PlaceholderUI />;
 };
 
-// --- COMPONENT: Interstitial Ad (Popup) ---
+
+// --- Interstitial Ad Component ---
 export const InterstitialAd: React.FC<{ isOpen: boolean, onClose: () => void, onFinish: () => void }> = ({ isOpen, onClose, onFinish }) => {
+  const [countdown, setCountdown] = useState(3);
   const [isNative, setIsNative] = useState(false);
-  const [showWebModal, setShowWebModal] = useState(false);
 
   useEffect(() => {
     if (isOpen && ENABLE_ADS) {
-        const success = triggerAndroidAd('interstitial', INTERSTITIAL_ID);
+        // Attempt to show Native Interstitial
+        const success = triggerNativeAd('interstitial', INTERSTITIAL_ID);
+        
         if (success) {
             setIsNative(true);
-            // Simulate waiting for user to close ad in native app
+            // In a real app, you'd wait for a callback from Android like `onAdClosed()`
+            // For now, we simulate a close after a few seconds or expect the user to close the native ad
             setTimeout(() => {
                 onFinish();
-            }, 2000);
-        } else {
-            setShowWebModal(true);
+            }, 1000); 
+            return;
         }
-    } else if (isOpen && !ENABLE_ADS) {
-        onFinish();
+
+        // Fallback to Web Simulation
+        setCountdown(3);
+        const interval = setInterval(() => {
+            setCountdown((prev) => {
+            if (prev <= 1) {
+                clearInterval(interval);
+                onFinish();
+                return 0;
+            }
+            return prev - 1;
+            });
+        }, 1000);
+        return () => clearInterval(interval);
     }
-  }, [isOpen]);
+  }, [isOpen, onFinish]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !ENABLE_ADS || isNative) return null;
 
-  // Web Modal Fallback
-  if (showWebModal) {
-      return (
-        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-white rounded-xl w-full max-w-sm overflow-hidden relative shadow-2xl">
-                <button 
-                    onClick={() => { setShowWebModal(false); onFinish(); }} 
-                    className="absolute top-2 right-2 text-gray-500 hover:text-black bg-white/80 rounded-full p-1 z-10"
-                >
-                    <X size={20} />
-                </button>
-                
-                <div className="bg-gradient-to-br from-gray-100 to-gray-200 h-40 flex items-center justify-center flex-col text-gray-400">
-                    <ExternalLink size={32} className="mb-2 text-gray-500" />
-                    <span className="font-bold text-sm text-gray-500">AdMob Interstitial</span>
-                </div>
-                
-                <div className="p-6 text-center">
-                    <h3 className="font-bold text-lg text-gray-900">Advertisement</h3>
-                    <p className="text-gray-500 text-sm mt-2 mb-6">This is a full-screen ad placeholder. In the real app, a Google Ad would appear here.</p>
-                    <button 
-                        onClick={() => { setShowWebModal(false); onFinish(); }}
-                        className="w-full bg-brand-600 text-white font-bold py-3 rounded-lg hover:bg-brand-700 transition-colors"
-                    >
-                        Close Ad
-                    </button>
-                </div>
-            </div>
-        </div>
-      );
-  }
-
-  return null;
+  // --- BROWSER SIMULATION (TEST MODE) ---
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4">
+      <div className="bg-white w-full max-w-xs rounded-xl overflow-hidden shadow-2xl relative animate-in zoom-in duration-200">
+         <div className="absolute top-2 right-2 z-10">
+             <div className="bg-black/50 text-white text-xs px-2 py-1 rounded-full">
+                 Closing in {countdown}s
+             </div>
+         </div>
+         
+         <div className="h-64 bg-gradient-to-tr from-blue-600 to-purple-600 flex flex-col items-center justify-center relative text-white p-6 text-center">
+             <h2 className="text-3xl font-extrabold tracking-tight mb-2">AdMob</h2>
+             <p className="text-sm font-medium opacity-90">Interstitial Ad Simulation</p>
+             <p className="text-[10px] mt-4 opacity-75 font-mono bg-black/20 px-2 py-1 rounded break-all">
+                {INTERSTITIAL_ID}
+             </p>
+         </div>
+         
+         <div className="p-4 text-center bg-gray-50">
+             <button className="w-full bg-gray-200 text-gray-600 py-3 rounded-lg text-sm font-bold" disabled>
+                 Close Ad
+             </button>
+         </div>
+      </div>
+      <p className="text-white/50 text-xs mt-4">Test Advertisement</p>
+    </div>
+  );
 };

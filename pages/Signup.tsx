@@ -16,18 +16,27 @@ const Signup: React.FC = () => {
   const handleGoogleSignup = async () => {
       setLoading(true);
       setError('');
-
       try {
         await auth.signInWithPopup(googleProvider);
-        // App.tsx handles navigation on success
+        // NO navigate() here. App.tsx handles it.
       } catch (err: any) {
          console.error("Google Signup Error:", err);
-         setLoading(false);
+         const isPopupIssue = 
+          err.code === 'auth/popup-blocked' || 
+          err.code === 'auth/popup-closed-by-user' || 
+          err.code === 'auth/operation-not-supported-in-this-environment';
          
-         if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
-             setError("Popup was blocked. Please try again.");
+         if (isPopupIssue) {
+              try {
+                  await auth.signInWithRedirect(googleProvider);
+                  return;
+              } catch (redirErr: any) {
+                  setError("Google Sign-In is not supported in this environment.");
+                  setLoading(false);
+              }
          } else {
-             setError("Google Signup failed. " + err.message); 
+             setError("Google Signup failed. Please try again."); 
+             setLoading(false);
          }
       }
   };
@@ -53,7 +62,7 @@ const Signup: React.FC = () => {
         // 2. Update Auth Profile
         await user.updateProfile({ displayName: name });
         
-        // 3. Create Firestore Document Immediately
+        // 3. Create Firestore Document Immediately (Specific to Signup Form Data)
         await db.collection('users').doc(user.uid).set({
             uid: user.uid,
             email: email,
@@ -62,17 +71,19 @@ const Signup: React.FC = () => {
             freeAdsUsed: 0,
             adsPosted: 0
         });
+        
+        // NO navigate(). App.tsx detects user -> PublicRoute -> Redirects to Home.
       }
     } catch (err: any) {
       console.error("Signup Error:", err);
-      setLoading(false);
       if (err.code === 'auth/email-already-in-use') {
          setError("Email already registered. Please Login.");
       } else if (err.code === 'auth/invalid-email') {
          setError("Please enter a valid email address.");
       } else {
-         setError("Signup failed. " + err.message);
+         setError("Signup failed. Please try again.");
       }
+      setLoading(false);
     }
   };
 
