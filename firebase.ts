@@ -1,3 +1,4 @@
+
 import firebase from "firebase/compat/app";
 import "firebase/compat/auth";
 import "firebase/compat/firestore";
@@ -22,5 +23,10 @@ export const auth = app.auth();
 export const db = app.firestore();
 export const storage = app.storage();
 export const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+// Explicitly set persistence to LOCAL
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch((error) => {
+  console.error("Auth Persistence Error:", error);
+});
 
 export default app;

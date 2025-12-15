@@ -75,8 +75,6 @@ const Login: React.FC = () => {
     
     try {
       await auth.signInWithEmailAndPassword(email, password);
-      // No need to create doc for email login, as signup handles it. 
-      // But for legacy compatibility, we could check, but let's assume signup flow is used.
       navigate('/', { replace: true });
     } catch (err: any) {
       console.error("Login Error:", err);
@@ -103,16 +101,23 @@ const Login: React.FC = () => {
       navigate('/', { replace: true });
     } catch (err: any) {
       console.error("Google Login Error:", err);
-      if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
+      // Enhanced Error Handling for Environment issues
+      const isPopupIssue = 
+          err.code === 'auth/popup-blocked' || 
+          err.code === 'auth/popup-closed-by-user' || 
+          err.code === 'auth/operation-not-supported-in-this-environment';
+
+      if (isPopupIssue) {
           try {
              await auth.signInWithRedirect(googleProvider);
-          } catch (redirErr) {
-             setError("Unable to sign in with Google.");
+             return; // Redirecting, so don't stop loading
+          } catch (redirErr: any) {
+             console.error("Redirect Fallback Error:", redirErr);
+             setError("Google Sign-In is not supported in this browser environment. Please try Email/Password.");
           }
       } else {
         setError("Google Sign-In failed.");
       }
-    } finally {
       setLoading(false);
     }
   };
@@ -160,7 +165,6 @@ const Login: React.FC = () => {
       const result = await confirmationResult.confirm(otp);
       if (result.user) {
           // For Phone Auth, we also need to ensure user record exists
-          // Since we don't have email/name, we create a basic record
            const userRef = db.collection('users').doc(result.user.uid);
            const doc = await userRef.get();
            if (!doc.exists) {

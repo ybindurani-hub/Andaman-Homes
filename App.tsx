@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -29,6 +29,17 @@ function useAuthHook() {
     return { user, loading };
 }
 
+// ScrollToTop Component
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+
+  React.useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+};
+
 // Defined outside App to prevent remounting on every render
 const ProtectedRouteManual = ({ children }: React.PropsWithChildren<{}>) => {
     const { user, loading } = useAuthHook();
@@ -40,6 +51,7 @@ const ProtectedRouteManual = ({ children }: React.PropsWithChildren<{}>) => {
 const App: React.FC = () => {
   return (
     <Router>
+      <ScrollToTop />
       <div className="min-h-screen bg-gray-50 font-sans text-slate-900 pb-20 md:pb-0">
         <Navbar />
         

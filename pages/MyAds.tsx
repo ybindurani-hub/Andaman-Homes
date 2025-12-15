@@ -3,31 +3,49 @@ import React, { useEffect, useState } from 'react';
 import { db, auth } from '../firebase';
 import { Property } from '../types';
 import PropertyCard from '../components/PropertyCard';
-import { PlusCircle, Loader2 } from 'lucide-react';
+import { PlusCircle, Loader2, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const MyAds: React.FC = () => {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchMyProperties = async () => {
       if (!auth.currentUser) return;
 
       try {
+        // FIX: Removed .orderBy("createdAt", "desc") from the query.
+        // Combining .where() and .orderBy() on different fields requires a Composite Index in Firestore.
+        // By removing .orderBy(), the query works out-of-the-box. We sort in JS below.
         const querySnapshot = await db.collection("properties")
             .where("ownerId", "==", auth.currentUser.uid)
-            .orderBy("createdAt", "desc")
             .get();
         
         const props: Property[] = [];
         querySnapshot.forEach((doc) => {
-          props.push({ id: doc.id, ...doc.data() } as Property);
+          // Handle potential missing data safely
+          const data = doc.data();
+          props.push({ id: doc.id, ...data } as Property);
+        });
+
+        // Sort results client-side
+        props.sort((a, b) => {
+            // Handle Firestore Timestamp or standard Date or null
+            const getMillis = (item: Property) => {
+                if (!item.createdAt) return 0;
+                if (typeof item.createdAt.toMillis === 'function') return item.createdAt.toMillis();
+                if (item.createdAt instanceof Date) return item.createdAt.getTime();
+                return 0;
+            };
+            return getMillis(b) - getMillis(a);
         });
 
         setProperties(props);
-      } catch (error) {
-        console.error("Error fetching my properties:", error);
+      } catch (err) {
+        console.error("Error fetching my properties:", err);
+        setError("Failed to load your ads.");
       } finally {
         setLoading(false);
       }
@@ -65,6 +83,13 @@ const MyAds: React.FC = () => {
                 <PlusCircle size={16} /> Post New Ad
             </Link>
         </div>
+
+        {error && (
+            <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 flex items-center gap-2">
+                <AlertCircle size={20} />
+                {error}
+            </div>
+        )}
 
         {properties.length > 0 ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
