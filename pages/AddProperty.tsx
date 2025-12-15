@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db, storage, auth } from '../firebase';
-import { Upload, Loader2, MapPin, Home, Ruler, BedDouble, Bath, Phone, X, IndianRupee } from 'lucide-react';
+import { Upload, Loader2, MapPin, Home, Ruler, BedDouble, Bath, Phone, X, IndianRupee, Plus } from 'lucide-react';
 import firebase from 'firebase/compat/app';
 
 const AMENITIES_LIST = [
@@ -382,7 +382,7 @@ const AddProperty: React.FC = () => {
                 <button
                     type="submit"
                     disabled={loading}
-                    className="inline-flex justify-center py-2 px-8 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex justify-center py-2 px-8 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 disabled:opacity-50 disabled:cursor-not-allowed items-center"
                 >
                     {loading ? (
                         <>
@@ -390,7 +390,10 @@ const AddProperty: React.FC = () => {
                             Post Free Ad
                         </>
                     ) : (
-                        'Post Free Ad'
+                        <>
+                          <Plus className="mr-2 h-4 w-4" />
+                          Post Free Ad
+                        </>
                     )}
                 </button>
             </div>

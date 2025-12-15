@@ -33,8 +33,11 @@ const Signup: React.FC = () => {
                 navigate('/');
             }
         } catch (err: any) {
-            console.error("Redirect Auth Error:", err);
-            setError(err.message || "Authentication failed.");
+            // Ignore environment errors on load
+            if (err.code !== 'auth/operation-not-supported-in-this-environment') {
+                console.error("Redirect Auth Error:", err);
+                setError(err.message || "Authentication failed.");
+            }
         }
     };
     checkRedirect();
@@ -91,16 +94,26 @@ const Signup: React.FC = () => {
       navigate('/');
     } catch (err: any) {
       console.error("Google Signup Error:", err);
+      
+      // Check for environment restrictions first
+      if (err.code === 'auth/operation-not-supported-in-this-environment' || err.message?.includes('location.protocol')) {
+        setError("Google Sign-In is restricted in this environment. Please use Email/Password or Guest Login.");
+        setLoading(false);
+        return;
+      }
+
       // Fallback for mobile
       if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
           try {
              await auth.signInWithRedirect(googleProvider);
              return;
           } catch (redirectErr: any) {
-             setError("Google Sign-In failed.");
+             if (redirectErr.code === 'auth/operation-not-supported-in-this-environment') {
+                 setError("Google Sign-In is restricted here. Use Email or Guest Login.");
+             } else {
+                 setError("Google Sign-In failed.");
+             }
           }
-      } else if (err.code === 'auth/operation-not-supported-in-this-environment' || err.message?.includes('location.protocol')) {
-        setError("Google Sign-In is restricted in this preview environment. Please use Email/Password or Guest Login.");
       } else if (err.code === 'auth/internal-error') {
         setError("Internal connection error. Please try Guest Login.");
       } else {

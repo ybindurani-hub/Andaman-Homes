@@ -100,8 +100,9 @@ const Navbar: React.FC = () => {
                   </Link>
                   <Link 
                     to="/login"
-                    className="ml-2 bg-brand-50 text-brand-600 border border-brand-200 hover:bg-brand-100 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors"
+                    className="ml-2 bg-brand-50 text-brand-600 border border-brand-200 hover:bg-brand-100 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1"
                   >
+                    <Plus size={14} />
                     Post Free Ad
                   </Link>
                 </div>

@@ -34,8 +34,11 @@ const Login: React.FC = () => {
                 navigate('/');
             }
         } catch (err: any) {
-            console.error("Redirect Auth Error:", err);
-            setError(err.message || "Authentication failed.");
+            // Ignore environment errors on load (common in preview/webviews)
+            if (err.code !== 'auth/operation-not-supported-in-this-environment') {
+                console.error("Redirect Auth Error:", err);
+                setError(err.message || "Authentication failed.");
+            }
         }
     };
     checkRedirect();
@@ -99,16 +102,26 @@ const Login: React.FC = () => {
       navigate('/');
     } catch (err: any) {
       console.error("Google Login Error:", err);
-      // If popup is blocked or fails on mobile, try redirect
+      
+      // Check for environment restrictions first
+      if (err.code === 'auth/operation-not-supported-in-this-environment' || err.message?.includes('location.protocol')) {
+        setError("Google Sign-In is restricted in this environment. Please use Email/Password or Guest Login.");
+        setLoading(false);
+        return;
+      }
+
+      // If popup is blocked or fails on mobile, try redirect (only if env supports it)
       if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
           try {
              await auth.signInWithRedirect(googleProvider);
              return; 
           } catch (redirectErr: any) {
-             setError("Google Sign-In failed.");
+             if (redirectErr.code === 'auth/operation-not-supported-in-this-environment') {
+                 setError("Google Sign-In is restricted here. Use Email or Guest Login.");
+             } else {
+                 setError("Google Sign-In failed.");
+             }
           }
-      } else if (err.code === 'auth/operation-not-supported-in-this-environment' || err.message?.includes('location.protocol')) {
-        setError("Google Sign-In is restricted in this preview environment. Please use Email/Password or Guest Login.");
       } else if (err.code === 'auth/internal-error') {
         setError("Internal Error: Google Auth is having trouble. Try Guest Login.");
       } else {
@@ -358,7 +371,7 @@ const Login: React.FC = () => {
         <div className="text-center text-sm mt-6">
             <p className="text-gray-600">
                 Don't have an account?{' '}
-                <Link to="/login" className="font-medium text-brand-600 hover:text-brand-500">
+                <Link to="/signup" className="font-medium text-brand-600 hover:text-brand-500">
                     Sign up free
                 </Link>
             </p>

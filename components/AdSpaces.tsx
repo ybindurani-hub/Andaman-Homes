@@ -1,89 +1,183 @@
 
 import React, { useEffect, useState } from 'react';
-import { X, ExternalLink, Info } from 'lucide-react';
+import { Info, ExternalLink } from 'lucide-react';
 
+// ============================================================================
+//  GOOGLE ADMOB CONFIGURATION (FOR ANDROID APP)
+//  Paste your AdMob Unit Keys here.
+// ============================================================================
+
+// 1. Enable Ads
+const ENABLE_ADS = true;
+
+// 2. AdMob App ID (For reference, put this in your AndroidManifest.xml)
+// TEST APP ID: ca-app-pub-3940256099942544~3347511713
+
+// 3. Ad Unit IDs (Google AdMob Test IDs provided)
+const BANNER_TOP_ID =  "ca-app-pub-3940256099942544/6300978111";      
+const BANNER_BOTTOM_ID =  "ca-app-pub-3940256099942544/6300978111";   
+const INTERSTITIAL_ID =  "ca-app-pub-3940256099942544/8691691433"; // Interstitial Video Test ID     
+const NATIVE_ID = "ca-app-pub-3940256099942544/2247696110"; // Native Advanced Video / MREC
+
+// ============================================================================
+
+/**
+ * Helper to communicate with Android Native Code
+ * This assumes your Android WebView has:
+ * webView.addJavascriptInterface(new WebAppInterface(this), "Android");
+ */
+const triggerNativeAd = (type: 'banner' | 'interstitial' | 'native', unitId: string, position?: string) => {
+    try {
+        // @ts-ignore
+        if (window.Android && window.Android.showAdMob) {
+            // @ts-ignore
+            window.Android.showAdMob(type, unitId, position || "");
+            console.log(`Called Native Android: ${type} - ${unitId}`);
+            return true;
+        }
+    } catch (e) {
+        console.error("AdMob Bridge Error", e);
+    }
+    return false;
+};
+
+
+// --- Banner Ad Component ---
 export const BannerAd: React.FC<{ position: 'top' | 'bottom' }> = ({ position }) => {
-  return (
-    <div className={`w-full bg-gray-50 border-y border-gray-200 flex items-center justify-center py-2 ${position === 'bottom' ? 'mb-[65px] md:mb-0' : ''}`}>
-      <div className="max-w-7xl w-full px-4 flex justify-center">
-        <div className="bg-gray-200 w-full md:w-[728px] h-[50px] md:h-[90px] flex items-center justify-center relative rounded overflow-hidden">
-            <span className="text-[10px] text-gray-400 absolute top-1 right-1 uppercase tracking-tighter">Ad</span>
-            <div className="text-center">
-                <span className="text-gray-500 font-bold text-sm md:text-lg">Google Ad Banner</span>
-                <p className="text-[10px] text-gray-400 hidden md:block">Best Real Estate Deals Here</p>
-            </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export const NativeAd: React.FC = () => {
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col h-full min-h-[220px]">
-      <div className="bg-gray-100 aspect-video flex items-center justify-center relative">
-         <div className="absolute top-2 left-2 bg-yellow-400 text-black text-[10px] font-bold px-2 py-0.5 rounded shadow-sm uppercase">Ad</div>
-         <Info className="text-gray-300 h-8 w-8" />
-      </div>
-      <div className="p-3 flex-1 flex flex-col justify-between">
-         <div>
-             <h4 className="font-bold text-gray-800 text-sm line-clamp-2">Home Loans @ 8.5% Interest</h4>
-             <p className="text-xs text-gray-500 mt-1 line-clamp-2">Get instant approval from top banks. minimal documentation required.</p>
-         </div>
-         <button className="mt-3 text-xs bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-md w-full font-medium flex items-center justify-center gap-1 transition-colors">
-            Apply Now <ExternalLink size={10} />
-         </button>
-      </div>
-    </div>
-  );
-};
-
-export const InterstitialAd: React.FC<{ isOpen: boolean, onClose: () => void, onFinish: () => void }> = ({ isOpen, onClose, onFinish }) => {
-  const [countdown, setCountdown] = useState(3);
+  const [isNative, setIsNative] = useState(false);
+  const unitId = position === 'top' ? BANNER_TOP_ID : BANNER_BOTTOM_ID;
 
   useEffect(() => {
-    if (isOpen) {
-      setCountdown(3); // Reset
-      const interval = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(interval);
-            onFinish();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      return () => clearInterval(interval);
+      if (ENABLE_ADS) {
+          // Attempt to load real ad via Native Bridge
+          const success = triggerNativeAd('banner', unitId, position);
+          setIsNative(success);
+      }
+  }, [position, unitId]);
+
+  if (!ENABLE_ADS) return null;
+
+  // If we are running in the actual Android App with the Bridge, 
+  // we render a transparent spacer so the Native Ad Overlay doesn't hide content.
+  if (isNative) {
+      return <div style={{ width: '100%', height: '50px' }} />; 
+  }
+
+  // --- BROWSER PLACEHOLDER (TEST MODE) ---
+  return (
+    <div className={`w-full bg-gray-100 border-y border-gray-300 flex items-center justify-center ${position === 'bottom' ? 'mb-[65px] md:mb-0' : ''}`}>
+      <div className="w-full max-w-[320px] h-[50px] bg-gray-300 flex flex-col items-center justify-center relative overflow-hidden">
+        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">AdMob Banner</span>
+        <span className="text-[8px] text-gray-400">{unitId}</span>
+        <div className="absolute top-0 right-0 bg-yellow-400 text-[8px] px-1 font-bold text-black">TEST MODE</div>
+      </div>
+    </div>
+  );
+};
+
+
+// --- Native / MREC Ad Component ---
+// AdMob Native ads are complex in WebView. We usually use a "Medium Rectangle" (300x250) banner here.
+export const NativeAd: React.FC = () => {
+  const [isNative, setIsNative] = useState(false);
+
+  useEffect(() => {
+      if (ENABLE_ADS) {
+          const success = triggerNativeAd('native', NATIVE_ID);
+          setIsNative(success);
+      }
+  }, []);
+
+  // Placeholder UI matching your app design
+  const PlaceholderUI = () => (
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col h-full min-h-[250px] relative">
+      <div className="bg-gray-100 flex-1 flex flex-col items-center justify-center p-4 text-center">
+         <Info className="text-gray-300 h-10 w-10 mb-2" />
+         <h4 className="font-bold text-gray-800 text-sm">AdMob Native / MREC</h4>
+         <p className="text-xs text-gray-500 mt-1 break-all px-4">{NATIVE_ID}</p>
+         <button className="mt-3 text-xs bg-blue-600 text-white py-2 px-4 rounded-md font-medium">
+            Install App
+         </button>
+      </div>
+      <div className="absolute top-2 left-2 bg-yellow-400 text-black text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">AD</div>
+    </div>
+  );
+
+  if (!ENABLE_ADS) return null;
+  
+  // If Native Bridge is active, we just reserve space. 
+  // The Android app should inject a View here or overlay it.
+  if (isNative) {
+      return <div className="w-full h-[250px] bg-transparent" />; 
+  }
+
+  return <PlaceholderUI />;
+};
+
+
+// --- Interstitial Ad Component ---
+export const InterstitialAd: React.FC<{ isOpen: boolean, onClose: () => void, onFinish: () => void }> = ({ isOpen, onClose, onFinish }) => {
+  const [countdown, setCountdown] = useState(3);
+  const [isNative, setIsNative] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && ENABLE_ADS) {
+        // Attempt to show Native Interstitial
+        const success = triggerNativeAd('interstitial', INTERSTITIAL_ID);
+        
+        if (success) {
+            setIsNative(true);
+            // In a real app, you'd wait for a callback from Android like `onAdClosed()`
+            // For now, we simulate a close after a few seconds or expect the user to close the native ad
+            setTimeout(() => {
+                onFinish();
+            }, 1000); 
+            return;
+        }
+
+        // Fallback to Web Simulation
+        setCountdown(3);
+        const interval = setInterval(() => {
+            setCountdown((prev) => {
+            if (prev <= 1) {
+                clearInterval(interval);
+                onFinish();
+                return 0;
+            }
+            return prev - 1;
+            });
+        }, 1000);
+        return () => clearInterval(interval);
     }
   }, [isOpen, onFinish]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !ENABLE_ADS || isNative) return null;
 
+  // --- BROWSER SIMULATION (TEST MODE) ---
   return (
-    <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center p-4">
-      <div className="bg-white w-full max-w-sm rounded-xl overflow-hidden shadow-2xl relative animate-in zoom-in duration-200">
+    <div className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4">
+      <div className="bg-white w-full max-w-xs rounded-xl overflow-hidden shadow-2xl relative animate-in zoom-in duration-200">
          <div className="absolute top-2 right-2 z-10">
              <div className="bg-black/50 text-white text-xs px-2 py-1 rounded-full">
-                 Ads closing in {countdown}s
+                 Closing in {countdown}s
              </div>
          </div>
          
-         <div className="h-64 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center relative">
-             <h2 className="text-white text-4xl font-extrabold tracking-tight">SALE</h2>
-             <p className="absolute bottom-4 text-white/80 text-sm font-medium">Sponsored Content</p>
+         <div className="h-64 bg-gradient-to-tr from-blue-600 to-purple-600 flex flex-col items-center justify-center relative text-white p-6 text-center">
+             <h2 className="text-3xl font-extrabold tracking-tight mb-2">AdMob</h2>
+             <p className="text-sm font-medium opacity-90">Interstitial Ad Simulation</p>
+             <p className="text-[10px] mt-4 opacity-75 font-mono bg-black/20 px-2 py-1 rounded break-all">
+                {INTERSTITIAL_ID}
+             </p>
          </div>
          
-         <div className="p-6 text-center">
-             <h3 className="font-bold text-xl text-gray-900">Premium Furniture</h3>
-             <p className="text-gray-600 text-sm mt-2">Rent beds, sofas, and dining tables at 50% OFF. Free delivery & setup.</p>
-             <div className="mt-6 flex gap-2">
-                 <button className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-lg text-sm font-medium" disabled>Skip</button>
-                 <button className="flex-1 bg-brand-600 text-white py-2 rounded-lg text-sm font-medium">View Offer</button>
-             </div>
+         <div className="p-4 text-center bg-gray-50">
+             <button className="w-full bg-gray-200 text-gray-600 py-3 rounded-lg text-sm font-bold" disabled>
+                 Close Ad
+             </button>
          </div>
       </div>
-      <p className="text-white/50 text-xs mt-4">Advertisement</p>
+      <p className="text-white/50 text-xs mt-4">Test Advertisement</p>
     </div>
   );
 };
