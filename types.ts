@@ -34,11 +34,22 @@ export interface Property {
   
   // Lifecycle
   status?: 'active' | 'sold' | 'rented' | 'expired' | 'occupied';
+  
+  // Payment Info
+  paymentStatus?: 'free' | 'paid';
+  paymentId?: string;
+  paymentAmount?: number;
 }
 
 export interface UserProfile {
   uid: string;
   email: string | null;
   displayName: string | null;
-  freeAdsUsed?: number;
+  freeAdsUsed: number;
+  adsPosted: number;
+}
+
+export interface AdSettings {
+  freeLimit: number;
+  adPrice: number;
 }

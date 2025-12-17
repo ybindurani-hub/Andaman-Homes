@@ -4,7 +4,6 @@ import "firebase/compat/auth";
 import "firebase/compat/firestore";
 import "firebase/compat/storage";
 
-// Using the provided configuration directly
 const firebaseConfig = {
   apiKey: "AIzaSyCrJp2FYJeJ5S4cbynYcqG7q15rWoPxcDE",
   authDomain: "anadaman-homes.firebaseapp.com",
@@ -15,22 +14,22 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-// Check for existing apps to prevent re-initialization errors
 const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
 
-// Export services for use in the app
 export const auth = app.auth();
 export const db = app.firestore();
 export const storage = app.storage();
 export const googleProvider = new firebase.auth.GoogleAuthProvider();
 
-// Explicitly set persistence to LOCAL
-// We catch the error to prevent crashes in environments like 'file://' or strict WebViews
-// where 'localStorage' might not be available or supported by Firebase.
+// Configure Google Provider Custom Parameters if needed
+googleProvider.setCustomParameters({
+  prompt: 'select_account'
+});
+
+// Enforce LOCAL Persistence for WebView/Mobile support
+// This is critical for keeping users logged in across app restarts in Median
 auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch((error) => {
-  if (error.code !== 'auth/operation-not-supported-in-this-environment') {
-     console.error("Auth Persistence Error:", error);
-  }
+    console.warn("Auth Persistence Warning:", error.code, error.message);
 });
 
 export default app;

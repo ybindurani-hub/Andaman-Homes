@@ -7,6 +7,9 @@ import { Loader2, AlertCircle, Phone, ArrowRight } from 'lucide-react';
 declare global {
   interface Window {
     recaptchaVerifier: any;
+    // Median/GoNative injected objects
+    median?: any;
+    gonative?: any; 
   }
 }
 
@@ -56,23 +59,28 @@ const Login: React.FC = () => {
     };
   }, []);
 
-  // --- 2. Google Login Handler ---
+  // --- 2. Google Login Handler (Environment Aware) ---
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError('');
 
     try {
-        // Detect Environment: Mobile or WebView usually prefers Redirect to avoid popup blocking
         const ua = navigator.userAgent.toLowerCase();
-        const isMobile = /iphone|ipad|ipod|android/.test(ua);
+        
+        // Detect Mobile, WebView, or Median App environment
+        const isMedian = ua.includes('median') || ua.includes('gonative') || !!window.median || !!window.gonative;
+        const isMobile = /iphone|ipad|ipod|android|blackberry|iemobile|opera mini/i.test(ua);
         const isWebView = /(wv|version\/[\d.]+)/.test(ua);
 
-        if (isMobile || isWebView) {
-            // Use Redirect for Mobile/WebViews
-            // The App.tsx component will handle the result via getRedirectResult
+        // STRATEGY: 
+        // Mobile/WebView/Median -> Use Redirect (Popup gets blocked or opens external browser)
+        // Desktop Browser -> Use Popup (Better UX)
+        if (isMobile || isMedian || isWebView) {
+            console.log("Environment: Mobile/WebView - Using Redirect");
             await auth.signInWithRedirect(googleProvider);
+            // Execution stops here as page redirects
         } else {
-            // Use Popup for Desktop Browsers
+            console.log("Environment: Desktop - Using Popup");
             await auth.signInWithPopup(googleProvider);
             // App.tsx auth listener handles navigation
         }
@@ -82,7 +90,11 @@ const Login: React.FC = () => {
             setLoading(false);
             return;
         }
-        setError("Google Sign-In failed. Please try again.");
+        if (err.code === 'auth/operation-not-supported-in-this-environment') {
+            setError("Login method not supported in this browser. Try standard mobile browser.");
+        } else {
+            setError("Google Sign-In failed. Please try again.");
+        }
         setLoading(false);
     }
   };
@@ -120,7 +132,7 @@ const Login: React.FC = () => {
       else if (err.code === 'auth/too-many-requests') setError("Too many attempts. Please try again later.");
       else if (err.code === 'auth/internal-error') {
           setError("Network Error. Reloading...");
-          window.location.reload();
+          setTimeout(() => window.location.reload(), 2000);
       }
       else setError("Failed to send OTP.");
     } finally {
@@ -235,7 +247,7 @@ const Login: React.FC = () => {
         <button
             onClick={handleGoogleLogin}
             disabled={loading}
-            className="mt-6 w-full py-3 border border-gray-200 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors font-medium text-gray-700"
+            className="mt-6 w-full py-3 border border-gray-200 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors font-medium text-gray-700 active:bg-gray-100"
         >
             {loading && !showOtpInput ? <Loader2 className="animate-spin h-5 w-5" /> : (
                 <>

@@ -2,8 +2,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db, storage, auth } from '../firebase';
-import { Upload, Loader2, MapPin, Home, Ruler, BedDouble, Bath, Phone, X, IndianRupee, Car, Building, Compass, Layers, User } from 'lucide-react';
+import { Upload, Loader2, MapPin, Ruler, BedDouble, Bath, Phone, X, IndianRupee, Compass, User, CreditCard } from 'lucide-react';
 import firebase from 'firebase/compat/app';
+
+// Extend window for Razorpay
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
 
 const AMENITIES_LIST = [
   "Parking", "Lift", "Gym", "Swimming Pool", "Power Backup", 
@@ -15,6 +22,7 @@ type CategoryType = 'rent' | 'sale-house' | 'sale-land';
 const AddProperty: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState('');
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   
@@ -80,6 +88,90 @@ const AddProperty: React.FC = () => {
     setPreviewUrls(prev => prev.filter((_, i) => i !== index));
   };
 
+  // --- CORE LOGIC: Save to DB ---
+  const savePropertyToDb = async (paymentStatus: 'free' | 'paid', paymentId: string | null, amount: number) => {
+    try {
+        setLoadingText("Uploading photos...");
+        
+        // 1. Upload Images
+        const uploadPromises = imageFiles.map(async (file) => {
+            const storageRef = storage.ref(`properties/${Date.now()}_${Math.random().toString(36).substr(7)}_${file.name}`);
+            const snapshot = await storageRef.put(file);
+            return snapshot.ref.getDownloadURL();
+        });
+        const imageUrls = await Promise.all(uploadPromises);
+
+        setLoadingText("Finalizing listing...");
+
+        // 2. Map Data
+        const isLand = category === 'sale-land';
+        const finalData = {
+            category: category === 'rent' ? 'rent' : 'sale',
+            propertyType: isLand ? 'land' : 'house',
+            
+            title: formData.title,
+            address: formData.address,
+            price: Number(formData.price),
+            description: formData.description,
+            area: Number(formData.area),
+            
+            ...(!isLand && {
+                bedrooms: Number(formData.bedrooms),
+                bathrooms: Number(formData.bathrooms),
+                furnishing: formData.furnishing,
+                parking: formData.parking,
+                floorNumber: formData.floorNumber,
+                totalFloors: formData.totalFloors,
+            }),
+            
+            ...(isLand && { facing: formData.facing }),
+
+            amenities: formData.amenities,
+            contactNumber: formData.contactNumber,
+            listedBy: formData.listedBy,
+            
+            imageUrl: imageUrls[0], 
+            imageUrls: imageUrls,   
+            ownerId: auth.currentUser!.uid,
+            status: 'active',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            
+            // Payment Info
+            paymentStatus: paymentStatus,
+            paymentId: paymentId,
+            paymentAmount: amount
+        };
+
+        // 3. Save Property
+        await db.collection("properties").add(finalData);
+        
+        // 4. Update User Stats
+        const userRef = db.collection('users').doc(auth.currentUser!.uid);
+        
+        if (paymentStatus === 'free') {
+            // Increment both adsPosted and freeAdsUsed
+            await userRef.set({
+                adsPosted: firebase.firestore.FieldValue.increment(1),
+                freeAdsUsed: firebase.firestore.FieldValue.increment(1)
+            }, { merge: true });
+        } else {
+            // Paid ad: Only increment adsPosted
+            await userRef.set({
+                adsPosted: firebase.firestore.FieldValue.increment(1)
+            }, { merge: true });
+        }
+
+        navigate('/');
+    } catch (error) {
+        console.error("Error saving ad:", error);
+        alert("Failed to save ad. Please try again.");
+    } finally {
+        setLoading(false);
+        setLoadingText("");
+    }
+  };
+
+  // --- HANDLER: Form Submit ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!auth.currentUser) return;
@@ -90,68 +182,75 @@ const AddProperty: React.FC = () => {
     }
 
     setLoading(true);
+    setLoadingText("Checking limits...");
 
     try {
-      // 1. Upload Images
-      const uploadPromises = imageFiles.map(async (file) => {
-        const storageRef = storage.ref(`properties/${Date.now()}_${Math.random().toString(36).substr(7)}_${file.name}`);
-        const snapshot = await storageRef.put(file);
-        return snapshot.ref.getDownloadURL();
-      });
-      const imageUrls = await Promise.all(uploadPromises);
+        // 1. Fetch Admin Settings (Dynamic Config)
+        const configDoc = await db.collection('settings').doc('ad_config').get();
+        // Defaults: 10 free ads, ₹30 per ad
+        const { freeLimit = 10, adPrice = 30 } = configDoc.exists ? configDoc.data() as any : {};
 
-      // 2. Map Data based on Category
-      const isLand = category === 'sale-land';
-      
-      const finalData = {
-        category: category === 'rent' ? 'rent' : 'sale',
-        propertyType: isLand ? 'land' : 'house',
-        
-        title: formData.title,
-        address: formData.address,
-        price: Number(formData.price),
-        description: formData.description,
-        area: Number(formData.area),
-        
-        // Conditionally add fields
-        ...(!isLand && {
-            bedrooms: Number(formData.bedrooms),
-            bathrooms: Number(formData.bathrooms),
-            furnishing: formData.furnishing,
-            parking: formData.parking,
-            floorNumber: formData.floorNumber,
-            totalFloors: formData.totalFloors,
-        }),
-        
-        ...(isLand && {
-            facing: formData.facing,
-        }),
+        // 2. Fetch User Stats
+        const userDoc = await db.collection('users').doc(auth.currentUser.uid).get();
+        const userData = userDoc.data();
+        const freeUsed = userData?.freeAdsUsed || 0;
 
-        amenities: formData.amenities,
-        contactNumber: formData.contactNumber,
-        listedBy: formData.listedBy,
-        
-        imageUrl: imageUrls[0], 
-        imageUrls: imageUrls,   
-        ownerId: auth.currentUser.uid,
-        status: 'active',
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      };
+        // 3. Determine Flow
+        if (freeUsed < freeLimit) {
+            // FLOW: FREE
+            await savePropertyToDb('free', null, 0);
+        } else {
+            // FLOW: PAID
+            setLoadingText("Initializing Payment...");
+            
+            // Razorpay Options
+            const options = {
+                key: "rzp_test_1DP5mmOlF5G5ag", // Test Key for Demo
+                amount: adPrice * 100, // Amount in paise
+                currency: "INR",
+                name: "Andaman Homes",
+                description: `Premium Ad Posting (Ad #${(userData?.adsPosted || 0) + 1})`,
+                image: "https://cdn-icons-png.flaticon.com/512/2111/2111320.png", // Generic Icon
+                
+                handler: async function (response: any) {
+                    // Success Callback
+                    console.log("Payment Success:", response);
+                    await savePropertyToDb('paid', response.razorpay_payment_id, adPrice);
+                },
+                prefill: {
+                    name: auth.currentUser.displayName || "User",
+                    email: auth.currentUser.email || "",
+                    contact: auth.currentUser.phoneNumber || ""
+                },
+                theme: {
+                    color: "#16a34a" // Brand Green
+                },
+                modal: {
+                    ondismiss: function() {
+                        setLoading(false);
+                        alert("Payment cancelled. Ad was not posted.");
+                    }
+                }
+            };
 
-      await db.collection("properties").add(finalData);
-      
-      // Update User Stats
-      await db.collection('users').doc(auth.currentUser.uid).set({
-          adsPosted: firebase.firestore.FieldValue.increment(1)
-      }, { merge: true });
+            // Open Razorpay
+            if (window.Razorpay) {
+                const rzp = new window.Razorpay(options);
+                rzp.on('payment.failed', function (response: any){
+                    alert("Payment Failed: " + response.error.description);
+                    setLoading(false);
+                });
+                rzp.open();
+            } else {
+                alert("Payment gateway failed to load. Please refresh.");
+                setLoading(false);
+            }
+        }
 
-      navigate('/');
-      
     } catch (error) {
-      console.error("Error posting ad:", error);
-      alert("Failed to post ad. Please try again.");
-    } finally {
-      setLoading(false);
+        console.error("Pre-check error:", error);
+        setLoading(false);
+        alert("Something went wrong. Please check your connection.");
     }
   };
 
@@ -237,7 +336,7 @@ const AddProperty: React.FC = () => {
                 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     
-                    {/* Area (Common but labeled differently) */}
+                    {/* Area */}
                     <div className="col-span-2">
                          <label className="block text-xs font-medium text-gray-500 mb-1">
                             {category === 'sale-land' ? 'Plot Area (sq. ft)' : 'Built-up Area (sq. ft)'}
@@ -247,7 +346,6 @@ const AddProperty: React.FC = () => {
                             <input type="number" name="area" required value={formData.area} onChange={handleInputChange} 
                                 className="w-full pl-9 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm" />
                          </div>
-                         {/* Helper for Sq Meters */}
                          {formData.area && (
                              <p className="text-[10px] text-gray-500 mt-1 text-right">
                                  ≈ {(Number(formData.area) * 0.0929).toFixed(2)} Sq. Meters
@@ -383,10 +481,18 @@ const AddProperty: React.FC = () => {
                 <button
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-4 rounded-xl shadow-lg transition-transform active:scale-[0.99] flex items-center justify-center gap-2"
+                    className="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-4 rounded-xl shadow-lg transition-transform active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                    {loading ? <Loader2 className="animate-spin" /> : 'Post Ad Now'}
+                    {loading ? (
+                        <>
+                            <Loader2 className="animate-spin" /> {loadingText || "Processing..."}
+                        </>
+                    ) : 'Post Ad Now'}
                 </button>
+                <div className="text-center mt-3 text-xs text-gray-500 flex items-center justify-center gap-1">
+                    <CreditCard size={12} />
+                    First 10 ads are free, then ₹30/ad.
+                </div>
             </div>
 
           </form>

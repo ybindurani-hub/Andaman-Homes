@@ -16,7 +16,6 @@ import { BannerAd } from './components/AdSpaces';
 import { Loader2 } from 'lucide-react';
 
 // --- HELPER: Ensure Firestore User Exists ---
-// Handles both Phone users (no email/photo usually) and Google users (email/photo available)
 export const ensureUserRecord = async (user: firebase.User, additionalData = {}) => {
   if (!user) return;
   const userRef = db.collection('users').doc(user.uid);
@@ -50,14 +49,14 @@ const ScrollToTop = () => {
   return null;
 };
 
-// --- COMPONENT: Protected Route (Redirects to Login if NOT authenticated) ---
+// --- COMPONENT: Protected Route ---
 const ProtectedRoute = ({ children, user, loading }: React.PropsWithChildren<{ user: firebase.User | null, loading: boolean }>) => {
     if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-600" /></div>;
     if (!user) return <Navigate to="/login" replace />;
     return <>{children}</>;
 };
 
-// --- COMPONENT: Public Route (Redirects to Home if authenticated) ---
+// --- COMPONENT: Public Route ---
 const PublicRoute = ({ children, user, loading }: React.PropsWithChildren<{ user: firebase.User | null, loading: boolean }>) => {
     if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-600" /></div>;
     if (user) return <Navigate to="/" replace />;
@@ -69,31 +68,34 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Handle Redirect Result (Critical for Mobile WebView Google Login)
-    auth.getRedirectResult().then(async (result) => {
-        if (result.user) {
-            console.log("Redirect login successful");
-            await ensureUserRecord(result.user);
-            // No need to manually navigate; onAuthStateChanged will trigger and update state
+    // 1. Handle Redirect Result (Essential for Median/Mobile)
+    // This catches the user returning from Google's redirect page
+    const checkRedirect = async () => {
+        try {
+            const result = await auth.getRedirectResult();
+            if (result.user) {
+                console.log("Redirect login successful:", result.user.uid);
+                await ensureUserRecord(result.user);
+            }
+        } catch (error: any) {
+             // Ignore 'unsupported environment' errors in dev/popup mode
+             if (error.code !== 'auth/operation-not-supported-in-this-environment' && 
+                 error.code !== 'auth/popup-closed-by-user') {
+                 console.error("Redirect Auth Error:", error);
+             }
         }
-    }).catch((error) => {
-        // Suppress common environment errors in non-supported browsers
-        const isEnvError = 
-            error.code === 'auth/operation-not-supported-in-this-environment' || 
-            error.message?.includes('operation-not-supported') ||
-            error.message?.includes('web storage');
-
-        if (!isEnvError) {
-            console.error("Redirect Auth Error:", error);
-        }
-    });
+    };
+    checkRedirect();
 
     // 2. Global Auth Listener
+    // This runs automatically on app load and when auth state changes
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
       if (currentUser) {
          await ensureUserRecord(currentUser); 
+         setUser(currentUser);
+      } else {
+         setUser(null);
       }
-      setUser(currentUser);
       setLoading(false);
     });
 
@@ -110,7 +112,7 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/" element={<Home />} />
           
-          {/* Public Routes (Only accessible if logged out) */}
+          {/* Public Routes (Accessible only if logged out) */}
           <Route 
             path="/login" 
             element={
@@ -120,7 +122,7 @@ const App: React.FC = () => {
             } 
           />
 
-          {/* Protected Routes (Only accessible if logged in) */}
+          {/* Protected Routes (Accessible only if logged in) */}
           <Route 
             path="/add-property" 
             element={
