@@ -3,7 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { db, auth } from '../firebase';
 import { Property } from '../types';
 import PropertyCard from '../components/PropertyCard';
-import { Search, ChevronDown, ShieldAlert, Loader2, Info, RefreshCw } from 'lucide-react';
+import { Search, ShieldAlert, Loader2, Info, RefreshCw, Plus } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { NativeAd } from '../components/AdSpaces';
 
 const Home: React.FC = () => {
@@ -17,23 +18,31 @@ const Home: React.FC = () => {
   const [sortBy, setSortBy] = useState<'newest' | 'priceLow' | 'priceHigh'>('newest');
 
   const fetchProperties = async () => {
-    // Only attempt if authenticated to satisfy Firestore rules
-    if (!auth.currentUser) return;
+    // Only fetch if we have a user (satisfies rules + logic)
+    if (!auth.currentUser) {
+        setLoading(false);
+        return;
+    }
 
     try {
       setLoading(true);
       setError(null);
       
+      // CRITICAL: Ensure collection name is 'posts' to match your security rules
       const querySnapshot = await db.collection("posts").get();
           
       const props: Property[] = [];
       const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
       const now = Date.now();
 
+      if (querySnapshot.empty) {
+          console.log("No properties found in 'posts' collection.");
+      }
+
       querySnapshot.forEach((doc) => {
         const data = doc.data() as Property;
         
-        // Skip inactive or expired listings
+        // Skip inactive listings
         if (data.status && data.status !== 'active') return;
 
         let createdAtMillis = 0;
@@ -54,20 +63,23 @@ const Home: React.FC = () => {
     } catch (err: any) {
       console.error("Home Fetch Error:", err);
       if (err.message.includes("permission-denied")) {
-          setError("Access Denied: Please sign out and sign in again.");
+          setError("Database Access Denied. Verify your Firestore rules for 'posts'.");
       } else {
-          setError("Unable to sync with database. Please check your internet.");
+          setError("Connection failed. Please check your internet.");
       }
     } finally {
       setLoading(false);
     }
   };
 
+  // Re-fetch when user logs in or component mounts
   useEffect(() => {
-    fetchProperties();
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+        if (user) fetchProperties();
+    });
+    return () => unsubscribe();
   }, []);
 
-  // Complex Client-side Filtering
   useEffect(() => {
     let result = [...allProperties];
 
@@ -104,13 +116,13 @@ const Home: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
-      {/* Search Header */}
+      {/* Fixed Search Header */}
       <div className="bg-white p-4 sticky top-0 z-40 shadow-sm border-b border-gray-100">
-         <div className="max-w-7xl mx-auto">
-            <div className="relative group">
+         <div className="max-w-7xl mx-auto flex gap-2">
+            <div className="relative flex-1 group">
                 <input 
                     type="text" 
-                    placeholder="Search area, project or BHK..."
+                    placeholder="Search Port Blair, Havelock..."
                     className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-50 transition-all text-sm font-medium"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -122,30 +134,28 @@ const Home: React.FC = () => {
 
       {/* Filter Tabs */}
       <div className="bg-white py-3 px-4 shadow-sm border-b border-gray-50">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 overflow-x-auto no-scrollbar">
             <div className="flex bg-gray-100 p-1 rounded-xl">
                 {['all', 'rent', 'sale'].map((t) => (
                     <button 
                         key={t}
                         onClick={() => setFilterType(t as any)} 
-                        className={`px-5 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${filterType === t ? 'bg-white text-brand-600 shadow-sm' : 'text-gray-500'}`}
+                        className={`px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${filterType === t ? 'bg-white text-brand-600 shadow-sm' : 'text-gray-500'}`}
                     >
                         {t}
                     </button>
                 ))}
             </div>
 
-            <div className="flex items-center gap-3">
-                <select 
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as any)}
-                    className="bg-white border border-gray-200 text-gray-600 py-2 px-3 rounded-xl text-[10px] font-black uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-brand-100"
-                >
-                    <option value="newest">Sort: Newest</option>
-                    <option value="priceLow">Price: Low to High</option>
-                    <option value="priceHigh">Price: High to Low</option>
-                </select>
-            </div>
+            <select 
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="bg-white border border-gray-200 text-gray-600 py-2 px-3 rounded-xl text-[10px] font-black uppercase tracking-widest focus:outline-none"
+            >
+                <option value="newest">Newest</option>
+                <option value="priceLow">Price: Low-High</option>
+                <option value="priceHigh">Price: High-Low</option>
+            </select>
         </div>
       </div>
 
@@ -157,17 +167,17 @@ const Home: React.FC = () => {
             ))}
           </div>
         ) : error ? (
-            <div className="text-center py-20 bg-white rounded-3xl border border-red-50 mx-auto max-w-lg shadow-sm">
+            <div className="text-center py-20 bg-white rounded-3xl border border-red-50 mx-auto max-w-lg shadow-sm px-6">
                 <div className="mx-auto w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-6">
                     <ShieldAlert size={32} />
                 </div>
-                <h3 className="text-xl font-black text-gray-900 mb-2">{error}</h3>
-                <p className="text-gray-500 text-sm px-10 mb-8">This might be due to a poor connection or outdated session.</p>
+                <h3 className="text-xl font-black text-gray-900 mb-2">Something's not right</h3>
+                <p className="text-gray-500 text-sm mb-8">{error}</p>
                 <button 
                     onClick={fetchProperties}
-                    className="inline-flex items-center gap-2 bg-brand-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-brand-700 shadow-lg transition-all active:scale-95"
+                    className="inline-flex items-center gap-2 bg-brand-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-brand-700 shadow-lg active:scale-95 transition-all"
                 >
-                    <RefreshCw size={18} /> Retry Connection
+                    <RefreshCw size={18} /> Retry
                 </button>
             </div>
         ) : filteredProperties.length > 0 ? (
@@ -175,22 +185,20 @@ const Home: React.FC = () => {
             {filteredProperties.map((property, index) => (
               <React.Fragment key={property.id}>
                   <PropertyCard property={property} />
-                  {(index + 1) % 5 === 0 && (
-                      <div className="col-span-1">
-                          <NativeAd />
-                      </div>
-                  )}
+                  {(index + 1) % 5 === 0 && <NativeAd />}
               </React.Fragment>
             ))}
           </div>
         ) : (
-          <div className="text-center py-24 bg-white rounded-3xl border border-dashed border-gray-300">
+          <div className="text-center py-24 bg-white rounded-3xl border border-dashed border-gray-300 px-6">
             <div className="mx-auto w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-6 text-gray-300">
                 <Info size={40} />
             </div>
-            <h3 className="text-xl font-bold text-gray-900">No matching properties</h3>
-            <p className="text-gray-500 text-sm mt-2">Try adjusting your filters or search keywords.</p>
-            <button onClick={() => {setSearchTerm(''); setFilterType('all');}} className="mt-6 text-brand-600 font-extrabold text-sm border-b-2 border-brand-200 hover:border-brand-600 transition-all">Reset All Filters</button>
+            <h3 className="text-xl font-bold text-gray-900">No properties found</h3>
+            <p className="text-gray-500 text-sm mt-2 mb-8">Be the first to post a property in this category!</p>
+            <Link to="/add-property" className="inline-flex items-center gap-2 bg-brand-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-brand-700 shadow-lg active:scale-95 transition-all">
+                <Plus size={20} /> Post New Ad
+            </Link>
           </div>
         )}
       </div>
