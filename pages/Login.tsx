@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { auth, googleProvider } from '../firebase';
 import firebase from 'firebase/compat/app';
 import { Loader2, AlertCircle, Phone, ArrowRight, ShieldCheck, HelpCircle } from 'lucide-react';
@@ -24,19 +25,15 @@ const Login: React.FC = () => {
   
   const isVerifierInitializing = useRef(false);
 
-  // --- Environment & Compatibility Checks ---
   useEffect(() => {
-    // 1. Check Protocol
     if (window.location.protocol === 'file:') {
         setEnvWarning("Running from a local file. Authentication may fail. Use a web server (http/https).");
     }
 
-    // 2. Check for IndexedDB (Required by Firebase Auth for LOCAL persistence)
     if (!window.indexedDB) {
         setEnvWarning("Your browser doesn't support storage. Persistence may not work.");
     }
 
-    // 3. Initialize Recaptcha with safe DOM checks
     const initRecaptcha = async () => {
         const container = document.getElementById('recaptcha-container');
         if (!container) return;
@@ -44,9 +41,7 @@ const Login: React.FC = () => {
         if (!window.recaptchaVerifier && !isVerifierInitializing.current) {
             isVerifierInitializing.current = true;
             try {
-                // Clear any existing instances to avoid "internal-error"
                 container.innerHTML = ''; 
-                
                 window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
                     'size': 'invisible',
                     'callback': () => { console.log("reCAPTCHA solved"); },
@@ -64,7 +59,7 @@ const Login: React.FC = () => {
         }
     };
 
-    const timer = setTimeout(initRecaptcha, 500); // Small delay for DOM readiness
+    const timer = setTimeout(initRecaptcha, 500);
 
     return () => {
         clearTimeout(timer);
@@ -86,12 +81,9 @@ const Login: React.FC = () => {
         const isApp = !!window.median || !!window.gonative;
         const isNonHttps = window.location.protocol !== 'https:';
 
-        // Use Redirect for App, Mobile, or Non-HTTPS environments to avoid "operation-not-supported"
         if (isMobile || isApp || isNonHttps) {
-            console.log("Auth: Using Redirect (Restricted Environment)");
             await auth.signInWithRedirect(googleProvider);
         } else {
-            console.log("Auth: Using Popup (Desktop Secure)");
             await auth.signInWithPopup(googleProvider);
         }
     } catch (err: any) {
@@ -119,7 +111,6 @@ const Login: React.FC = () => {
 
     setLoading(true);
     try {
-      // Re-initialize if lost
       if (!window.recaptchaVerifier) {
            const container = document.getElementById('recaptcha-container');
            if (container) container.innerHTML = '';
@@ -135,11 +126,7 @@ const Login: React.FC = () => {
       
     } catch (err: any) {
       console.error("Auth: OTP Send Error:", err);
-      if (err.code === 'auth/internal-error') {
-          setError("Security error. Please refresh the page and try again.");
-      } else {
-          setError(err.message || "Failed to send OTP. Check your connection.");
-      }
+      setError(err.code === 'auth/internal-error' ? "Security error. Please refresh." : "Failed to send OTP.");
     } finally {
       setLoading(false);
     }
@@ -152,7 +139,7 @@ const Login: React.FC = () => {
     try {
       await confirmationResult.confirm(otp);
     } catch (err: any) {
-      setError(err.code === 'auth/invalid-verification-code' ? "Invalid OTP. Please try again." : "Verification failed.");
+      setError(err.code === 'auth/invalid-verification-code' ? "Invalid OTP." : "Verification failed.");
       setLoading(false);
     }
   };
@@ -161,8 +148,8 @@ const Login: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
       <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
         <div className="text-center mb-6">
-            <h2 className="text-2xl font-extrabold text-gray-900">Sign In</h2>
-            <p className="mt-2 text-sm text-gray-500">Access your Andaman Homes account</p>
+            <h2 className="text-3xl font-extrabold text-gray-900">Login</h2>
+            <p className="mt-2 text-sm text-gray-500">Sign in to browse and list properties</p>
         </div>
 
         {envWarning && (
@@ -177,7 +164,7 @@ const Login: React.FC = () => {
             </div>
         )}
         
-        <div id="recaptcha-container" className="mb-2"></div>
+        <div id="recaptcha-container"></div>
 
         {!showOtpInput ? (
             <form onSubmit={handleSendOtp} className="space-y-4">
@@ -201,7 +188,7 @@ const Login: React.FC = () => {
                     disabled={loading || phoneNumber.length < 10} 
                     className="w-full py-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold flex justify-center items-center shadow-lg transition-all active:scale-95 disabled:opacity-50"
                 >
-                     {loading ? <Loader2 className="animate-spin" /> : 'Get Verification Code'}
+                     {loading ? <Loader2 className="animate-spin" /> : 'Get OTP Code'}
                 </button>
             </form>
         ) : (
@@ -227,7 +214,7 @@ const Login: React.FC = () => {
                     disabled={loading || otp.length < 6} 
                     className="w-full py-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold flex justify-center items-center shadow-lg transition-all active:scale-95 disabled:opacity-50 gap-2"
                 >
-                     {loading ? <Loader2 className="animate-spin" /> : <>Login Now <ArrowRight size={18} /></>}
+                     {loading ? <Loader2 className="animate-spin" /> : <>Verify & Login <ArrowRight size={18} /></>}
                 </button>
             </form>
         )}
@@ -240,19 +227,25 @@ const Login: React.FC = () => {
         <button
             onClick={handleGoogleLogin}
             disabled={loading}
-            className="w-full py-3.5 border border-gray-200 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors font-bold text-gray-700 active:bg-gray-100"
+            className="w-full py-3.5 border border-gray-200 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors font-bold text-gray-700 active:bg-gray-100 mb-6"
         >
             {loading && !showOtpInput ? <Loader2 className="animate-spin h-5 w-5" /> : (
                 <>
                     <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="h-5 w-5" />
-                    Login with Google
+                    Continue with Google
                 </>
             )}
         </button>
 
+        <div className="text-center">
+            <p className="text-sm text-gray-500">
+                Don't have an account? <Link to="/signup" className="text-brand-600 font-bold hover:underline">Sign up</Link>
+            </p>
+        </div>
+
         <div className="mt-8 flex items-center justify-center gap-2 text-[10px] text-gray-400 uppercase font-bold tracking-widest">
             <ShieldCheck size={14} className="text-brand-500" />
-            <span>Secure 256-bit Encryption</span>
+            <span>Secure Access Gateway</span>
         </div>
       </div>
     </div>

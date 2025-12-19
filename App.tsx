@@ -4,6 +4,7 @@ import { HashRouter as Router, Routes, Route, Navigate, useLocation, useNavigate
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Login from './pages/Login';
+import Signup from './pages/Signup';
 import AddProperty from './pages/AddProperty';
 import PropertyDetails from './pages/PropertyDetails';
 import PaymentPage from './pages/PaymentPage';
@@ -74,7 +75,6 @@ const AuthHandler = ({ setUser, setLoading }: any) => {
                 await ensureUserRecord(currentUser);
                 setUser(currentUser);
 
-                // Global listener for new messages in all chats
                 const chatUnsubscribe = db.collection('chats')
                     .where('participants', 'array-contains', currentUser.uid)
                     .onSnapshot(snapshot => {
@@ -111,12 +111,17 @@ const AuthHandler = ({ setUser, setLoading }: any) => {
 };
 
 const ProtectedRoute = ({ children, user, loading }: any) => {
-    if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-600" /></div>;
+    if (loading) return (
+      <div className="h-screen flex flex-col items-center justify-center bg-white">
+        <Loader2 className="animate-spin text-brand-600 mb-2" size={32} />
+        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Loading Andaman Homes</span>
+      </div>
+    );
     return user ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
 const PublicRoute = ({ children, user, loading }: any) => {
-    if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-600" /></div>;
+    if (loading) return null;
     return user ? <Navigate to="/" replace /> : <>{children}</>;
 };
 
@@ -132,14 +137,15 @@ const App: React.FC = () => {
         <Navbar />
         <BannerAd position="top" />
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<ProtectedRoute user={user} loading={loading}><Home /></ProtectedRoute>} />
           <Route path="/login" element={<PublicRoute user={user} loading={loading}><Login /></PublicRoute>} />
+          <Route path="/signup" element={<PublicRoute user={user} loading={loading}><Signup /></PublicRoute>} />
           <Route path="/add-property" element={<ProtectedRoute user={user} loading={loading}><AddProperty /></ProtectedRoute>} />
           <Route path="/my-ads" element={<ProtectedRoute user={user} loading={loading}><MyAds /></ProtectedRoute>} />
           <Route path="/payment" element={<ProtectedRoute user={user} loading={loading}><PaymentPage /></ProtectedRoute>} />
           <Route path="/chats" element={<ProtectedRoute user={user} loading={loading}><ChatList /></ProtectedRoute>} />
           <Route path="/chat/:chatId" element={<ProtectedRoute user={user} loading={loading}><ChatScreen /></ProtectedRoute>} />
-          <Route path="/property/:id" element={<PropertyDetails />} />
+          <Route path="/property/:id" element={<ProtectedRoute user={user} loading={loading}><PropertyDetails /></ProtectedRoute>} />
         </Routes>
         <BannerAd position="bottom" />
       </div>

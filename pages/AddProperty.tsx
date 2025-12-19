@@ -29,7 +29,6 @@ const AddProperty: React.FC = () => {
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      // Fix: Explicitly cast Array.from to File[] to ensure 'file' is not inferred as 'unknown'
       const newFiles = Array.from(e.target.files) as File[];
       setImageFiles(prev => [...prev, ...newFiles]);
       const newPreviews = newFiles.map(file => URL.createObjectURL(file));
@@ -47,8 +46,8 @@ const AddProperty: React.FC = () => {
         setLoadingText("Uploading high-quality images...");
         const uploadPromises = imageFiles.map(async (file) => {
             const extension = file.name.split('.').pop();
-            const storageRef = storage.ref(`properties/${Date.now()}_${Math.random().toString(36).substr(7)}.${extension}`);
-            // No compression - upload raw blob
+            // Updated storage path to 'posts'
+            const storageRef = storage.ref(`posts/${Date.now()}_${Math.random().toString(36).substr(7)}.${extension}`);
             const snapshot = await storageRef.put(file);
             return snapshot.ref.getDownloadURL();
         });
@@ -83,7 +82,8 @@ const AddProperty: React.FC = () => {
             paymentStatus, paymentId, paymentAmount: amount
         };
 
-        await db.collection("properties").add(finalData);
+        // Updated Firestore collection to 'posts'
+        await db.collection("posts").add(finalData);
         await db.collection('users').doc(auth.currentUser!.uid).set({
             adsPosted: firebase.firestore.FieldValue.increment(1),
             ...(paymentStatus === 'free' && { freeAdsUsed: firebase.firestore.FieldValue.increment(1) })

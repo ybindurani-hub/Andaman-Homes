@@ -22,7 +22,8 @@ const PropertyDetails: React.FC = () => {
       if (!id) return;
       try {
         setLoading(true);
-        const docRef = db.collection("properties").doc(id);
+        // Updated to use 'posts' collection
+        const docRef = db.collection("posts").doc(id);
         const docSnap = await docRef.get();
         
         if (docSnap.exists) {
@@ -61,7 +62,7 @@ const PropertyDetails: React.FC = () => {
   const updateStatus = async (newStatus: 'sold' | 'rented' | 'occupied' | 'active') => {
       if (!id) return;
       try {
-          await db.collection("properties").doc(id).update({ status: newStatus });
+          await db.collection("posts").doc(id).update({ status: newStatus });
           setProperty(prev => prev ? { ...prev, status: newStatus } : null);
       } catch (err) {
           alert("Failed to update status. Only the owner can perform this action.");
@@ -71,7 +72,7 @@ const PropertyDetails: React.FC = () => {
   const deleteProperty = async () => {
       if (!id || !window.confirm("Permanently delete this ad?")) return;
       try {
-          await db.collection("properties").doc(id).delete();
+          await db.collection("posts").doc(id).delete();
           navigate('/my-ads');
       } catch (err) {
           alert("Failed to delete ad.");

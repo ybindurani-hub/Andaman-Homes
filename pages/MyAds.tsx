@@ -16,23 +16,18 @@ const MyAds: React.FC = () => {
       if (!auth.currentUser) return;
 
       try {
-        // FIX: Removed .orderBy("createdAt", "desc") from the query.
-        // Combining .where() and .orderBy() on different fields requires a Composite Index in Firestore.
-        // By removing .orderBy(), the query works out-of-the-box. We sort in JS below.
-        const querySnapshot = await db.collection("properties")
+        // Updated to use 'posts' collection
+        const querySnapshot = await db.collection("posts")
             .where("ownerId", "==", auth.currentUser.uid)
             .get();
         
         const props: Property[] = [];
         querySnapshot.forEach((doc) => {
-          // Handle potential missing data safely
           const data = doc.data();
           props.push({ id: doc.id, ...data } as Property);
         });
 
-        // Sort results client-side
         props.sort((a, b) => {
-            // Handle Firestore Timestamp or standard Date or null
             const getMillis = (item: Property) => {
                 if (!item.createdAt) return 0;
                 if (typeof item.createdAt.toMillis === 'function') return item.createdAt.toMillis();
@@ -57,7 +52,8 @@ const MyAds: React.FC = () => {
   const handleDeleteProperty = async (id: string) => {
       if (window.confirm("Are you sure you want to delete this ad permanently?")) {
           try {
-              await db.collection("properties").doc(id).delete();
+              // Updated to use 'posts' collection
+              await db.collection("posts").doc(id).delete();
               setProperties(prev => prev.filter(p => p.id !== id));
           } catch (error) {
               console.error("Error deleting property:", error);

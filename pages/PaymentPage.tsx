@@ -23,8 +23,8 @@ const PaymentPage: React.FC = () => {
         try {
             if (!auth.currentUser) return;
 
-            // 1. Save the Property (Add serverTimestamp here)
-            await db.collection("properties").add({
+            // 1. Save the Property to 'posts' collection
+            await db.collection("posts").add({
                 ...propertyData,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
@@ -57,16 +57,11 @@ const PaymentPage: React.FC = () => {
 
                 <div className="p-8 flex flex-col items-center">
                     <div className="bg-white p-4 rounded-xl mb-6 border-2 border-brand-100 shadow-inner flex flex-col items-center justify-center w-full">
-                        {/* 
-                           IMPORTANT: 
-                           Save your QR code image as 'payment-qr.png' in the 'public' folder of your project.
-                        */}
                         <img 
                            src="/payment-qr.png"
                            alt="Scan to Pay"
                            className="w-56 h-56 object-contain rounded-lg border border-gray-100"
                            onError={(e) => {
-                               // Fallback to placeholder only if the file is missing
                                const target = e.currentTarget;
                                target.src = "https://api.qrserver.com/v1/create-qr-code/?size=225x225&data=upi://pay?pa=merchant@upi&pn=AndamanHomes&am=20.00&cu=INR";
                                target.onerror = null; 

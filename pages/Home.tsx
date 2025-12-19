@@ -20,10 +20,8 @@ const Home: React.FC = () => {
     const fetchProperties = async () => {
       try {
         setLoading(true);
-        // CRITICAL FIX: Fetch plain collection. 
-        // Using .where() often triggers "insufficient permissions" or "missing index" errors
-        // especially if the user is not logged in or rules are strict.
-        const querySnapshot = await db.collection("properties").get();
+        // Updated to use 'posts' collection per security rules
+        const querySnapshot = await db.collection("posts").get();
             
         const props: Property[] = [];
         const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
@@ -32,7 +30,6 @@ const Home: React.FC = () => {
         querySnapshot.forEach((doc) => {
           const data = doc.data() as Property;
           
-          // Only process 'active' status properties
           if (data.status && data.status !== 'active') return;
 
           let createdAtMillis = 0;
@@ -42,7 +39,6 @@ const Home: React.FC = () => {
              else if (data.createdAt instanceof Date) createdAtMillis = data.createdAt.getTime();
           }
 
-          // Filter out ads older than 30 days
           const isExpired = createdAtMillis > 0 && (now - createdAtMillis > THIRTY_DAYS_MS);
           
           if (!isExpired) {
@@ -54,11 +50,7 @@ const Home: React.FC = () => {
         setError(null);
       } catch (err: any) {
         console.error("Home: Fetch Error:", err);
-        if (err.message.includes("permission-denied")) {
-            setError("Permission Denied: Please log in to browse listings.");
-        } else {
-            setError("Unable to connect to database. Please check your internet.");
-        }
+        setError("Unable to load listings. Please check your internet connection.");
       } finally {
         setLoading(false);
       }
@@ -67,7 +59,6 @@ const Home: React.FC = () => {
     fetchProperties();
   }, []);
 
-  // Complex Client-side Filtering Logic
   useEffect(() => {
     let result = [...allProperties];
 
@@ -156,8 +147,8 @@ const Home: React.FC = () => {
                     <ShieldAlert size={24} />
                 </div>
                 <h3 className="text-lg font-bold text-gray-900">{error}</h3>
-                <p className="text-gray-500 text-sm mt-1 px-10">Check your internet connection or try logging in again.</p>
-                <button onClick={() => window.location.reload()} className="mt-4 text-brand-600 text-sm font-bold underline">Retry Refresh</button>
+                <p className="text-gray-500 text-sm mt-1 px-10">Please check your connection or refresh the page.</p>
+                <button onClick={() => window.location.reload()} className="mt-4 text-brand-600 text-sm font-bold underline">Refresh Page</button>
             </div>
         ) : filteredProperties.length > 0 ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
@@ -175,8 +166,8 @@ const Home: React.FC = () => {
         ) : (
           <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300 mx-2">
             <Info className="mx-auto text-gray-300 mb-2" size={32} />
-            <h3 className="text-lg font-medium text-gray-900">No properties match your search</h3>
-            <button onClick={() => {setSearchTerm(''); setFilterType('all');}} className="text-brand-600 text-sm font-bold mt-2">Clear all filters</button>
+            <h3 className="text-lg font-medium text-gray-900">No properties found</h3>
+            <button onClick={() => {setSearchTerm(''); setFilterType('all');}} className="text-brand-600 text-sm font-bold mt-2">Clear filters</button>
           </div>
         )}
       </div>
