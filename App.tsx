@@ -14,7 +14,7 @@ import MyAds from './pages/MyAds';
 import { auth, db } from './firebase';
 import firebase from 'firebase/compat/app';
 import { BannerAd } from './components/AdSpaces';
-import { Loader2, Bell, X, MessageCircle } from 'lucide-react';
+import { Loader2, Bell, X, MessageCircle, Home as HomeIcon } from 'lucide-react';
 
 export const ensureUserRecord = async (user: firebase.User, additionalData = {}) => {
   if (!user) return;
@@ -45,6 +45,21 @@ const ScrollToTop = () => {
   return null;
 };
 
+const SplashScreen = () => (
+    <div className="h-screen w-screen flex flex-col items-center justify-center bg-white">
+        <div className="flex flex-col items-center animate-pulse">
+            <div className="bg-brand-500 text-white p-4 rounded-3xl mb-4 shadow-lg shadow-brand-200">
+                <HomeIcon size={48} />
+            </div>
+            <h1 className="text-2xl font-black text-gray-900 tracking-tight">ANDAMAN <span className="text-brand-600">HOMES</span></h1>
+            <div className="mt-8 flex items-center gap-2 text-gray-400">
+                <Loader2 className="animate-spin" size={20} />
+                <span className="text-xs font-bold uppercase tracking-widest">Initialising Secure Session</span>
+            </div>
+        </div>
+    </div>
+);
+
 const NotificationToast = ({ notification, onClose, onClick }: any) => (
     <div className="fixed top-4 left-4 right-4 z-[100] md:left-auto md:w-80 animate-in slide-in-from-top duration-300">
         <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 flex items-center gap-4 cursor-pointer active:scale-95 transition-transform" onClick={onClick}>
@@ -70,11 +85,18 @@ const AuthHandler = ({ setUser, setLoading }: any) => {
     const isFirstLoad = useRef(true);
 
     useEffect(() => {
+        // Safety timeout to prevent infinite loading screen
+        const timer = setTimeout(() => {
+            setLoading(false);
+        }, 5000);
+
         const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
+            clearTimeout(timer);
             if (currentUser) {
                 await ensureUserRecord(currentUser);
                 setUser(currentUser);
 
+                // Listen to relevant messages
                 const chatUnsubscribe = db.collection('chats')
                     .where('participants', 'array-contains', currentUser.uid)
                     .onSnapshot(snapshot => {
@@ -91,12 +113,14 @@ const AuthHandler = ({ setUser, setLoading }: any) => {
                             }
                         });
                         isFirstLoad.current = false;
-                    });
+                    }, err => console.log("Chat listener inhibited"));
+                
+                setLoading(false);
                 return () => chatUnsubscribe();
             } else {
                 setUser(null);
+                setLoading(false);
             }
-            setLoading(false);
         });
         return () => unsubscribe();
     }, [location.pathname]);
@@ -111,17 +135,12 @@ const AuthHandler = ({ setUser, setLoading }: any) => {
 };
 
 const ProtectedRoute = ({ children, user, loading }: any) => {
-    if (loading) return (
-      <div className="h-screen flex flex-col items-center justify-center bg-white">
-        <Loader2 className="animate-spin text-brand-600 mb-2" size={32} />
-        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Loading Andaman Homes</span>
-      </div>
-    );
+    if (loading) return <SplashScreen />;
     return user ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
 const PublicRoute = ({ children, user, loading }: any) => {
-    if (loading) return null;
+    if (loading) return <SplashScreen />;
     return user ? <Navigate to="/" replace /> : <>{children}</>;
 };
 
