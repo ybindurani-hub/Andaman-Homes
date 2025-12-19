@@ -21,15 +21,25 @@ export const db = app.firestore();
 export const storage = app.storage();
 export const googleProvider = new firebase.auth.GoogleAuthProvider();
 
-// Configure Google Provider Custom Parameters if needed
 googleProvider.setCustomParameters({
   prompt: 'select_account'
 });
 
-// Enforce LOCAL Persistence for WebView/Mobile support
-// This is critical for keeping users logged in across app restarts in Median
-auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch((error) => {
-    console.warn("Auth Persistence Warning:", error.code, error.message);
-});
+// Enforce Persistent Auth with Session Fallback
+// This fixes "operation-not-supported" in environments where IndexedDB is blocked
+const initAuth = async () => {
+    try {
+        await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+    } catch (error: any) {
+        console.warn("Auth: LOCAL persistence failed, trying SESSION...", error.message);
+        try {
+            await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
+        } catch (e) {
+            console.error("Auth: No persistence available.");
+        }
+    }
+};
+
+initAuth();
 
 export default app;

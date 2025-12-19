@@ -4,13 +4,14 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebase';
 import firebase from 'firebase/compat/app';
 import { Property } from '../types';
-import { MapPin, BedDouble, Bath, Ruler, CheckCircle, ArrowLeft, Phone, Tag, MessageSquare, ImageOff, Trash2, Building, Car, Compass, User } from 'lucide-react';
+import { MapPin, BedDouble, Bath, Ruler, CheckCircle, ArrowLeft, Phone, Tag, MessageSquare, ImageOff, Trash2, Building, Car, Compass, User, ShieldAlert } from 'lucide-react';
 
 const PropertyDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [property, setProperty] = useState<Property | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeImage, setActiveImage] = useState<string>('');
   const [allImages, setAllImages] = useState<string[]>([]);
   const [isOwner, setIsOwner] = useState(false);
@@ -20,6 +21,7 @@ const PropertyDetails: React.FC = () => {
     const fetchProperty = async () => {
       if (!id) return;
       try {
+        setLoading(true);
         const docRef = db.collection("properties").doc(id);
         const docSnap = await docRef.get();
         
@@ -37,9 +39,17 @@ const PropertyDetails: React.FC = () => {
           
           setAllImages(images);
           if (images.length > 0) setActiveImage(images[0]);
+          setError(null);
+        } else {
+            setError("Property listing not found.");
         }
-      } catch (error) {
-        console.error("Error fetching details:", error);
+      } catch (err: any) {
+        console.error("Error fetching details:", err);
+        if (err.message.includes("permission-denied")) {
+            setError("You do not have permission to view this property.");
+        } else {
+            setError("Failed to load property details.");
+        }
       } finally {
         setLoading(false);
       }
@@ -50,14 +60,22 @@ const PropertyDetails: React.FC = () => {
 
   const updateStatus = async (newStatus: 'sold' | 'rented' | 'occupied' | 'active') => {
       if (!id) return;
-      await db.collection("properties").doc(id).update({ status: newStatus });
-      setProperty(prev => prev ? { ...prev, status: newStatus } : null);
+      try {
+          await db.collection("properties").doc(id).update({ status: newStatus });
+          setProperty(prev => prev ? { ...prev, status: newStatus } : null);
+      } catch (err) {
+          alert("Failed to update status. Only the owner can perform this action.");
+      }
   };
 
   const deleteProperty = async () => {
       if (!id || !window.confirm("Permanently delete this ad?")) return;
-      await db.collection("properties").doc(id).delete();
-      navigate('/my-ads');
+      try {
+          await db.collection("properties").doc(id).delete();
+          navigate('/my-ads');
+      } catch (err) {
+          alert("Failed to delete ad.");
+      }
   };
 
   const handleStartChat = async () => {
@@ -69,23 +87,37 @@ const PropertyDetails: React.FC = () => {
     const chatId = uids.join('_');
     const chatRef = db.collection('chats').doc(chatId);
     
-    // Create if not exists
-    const chatDoc = await chatRef.get();
-    if (!chatDoc.exists) {
-        await chatRef.set({
-            participants: uids,
-            propertyId: property.id,
-            propertyTitle: property.title,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            lastMessage: '',
-            lastMessageTimestamp: firebase.firestore.FieldValue.serverTimestamp()
-        });
+    try {
+        const chatDoc = await chatRef.get();
+        if (!chatDoc.exists) {
+            await chatRef.set({
+                participants: uids,
+                propertyId: property.id,
+                propertyTitle: property.title,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                lastMessage: '',
+                lastMessageTimestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+        navigate(`/chat/${chatId}`);
+    } catch (err) {
+        alert("Failed to start chat. Please check your permissions.");
     }
-    navigate(`/chat/${chatId}`);
   };
 
   if (loading) return <div className="h-screen flex items-center justify-center"><div className="animate-spin h-8 w-8 border-4 border-brand-500 rounded-full border-t-transparent"></div></div>;
-  if (!property) return <div className="text-center mt-20">Property not found. <Link to="/" className="text-brand-600">Go Back</Link></div>;
+  
+  if (error) {
+      return (
+          <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 text-center">
+              <ShieldAlert className="text-red-500 mb-4" size={48} />
+              <h1 className="text-xl font-bold text-gray-900 mb-2">{error}</h1>
+              <Link to="/" className="text-brand-600 font-bold hover:underline">Back to Browse</Link>
+          </div>
+      );
+  }
+
+  if (!property) return null;
 
   const isInactive = property.status && property.status !== 'active';
   const sqMeters = property.area ? (property.area * 0.092903).toFixed(1) : '0';
@@ -113,7 +145,6 @@ const PropertyDetails: React.FC = () => {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Gallery */}
             <div className="space-y-4">
                 <div className="aspect-video bg-black rounded-xl overflow-hidden relative flex items-center justify-center">
                      {allImages.length > 0 && !imgError ? (
@@ -134,7 +165,6 @@ const PropertyDetails: React.FC = () => {
                 )}
             </div>
 
-            {/* Info */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 h-fit">
                 <div className="flex justify-between items-start">
                     <div>
@@ -149,14 +179,12 @@ const PropertyDetails: React.FC = () => {
                 </div>
 
                 <div className="mt-6 p-4 bg-gray-50 rounded-xl border border-gray-200 grid grid-cols-3 gap-4 text-center">
-                    {/* Area (Always Shown) */}
                     <div>
                         <div className="flex items-center justify-center text-brand-600 mb-1"><Ruler size={20} /></div>
                         <div className="font-bold text-gray-900">{property.area}</div>
                         <div className="text-[10px] text-gray-500 uppercase">Sq. Ft</div>
                     </div>
                     
-                    {/* Conditional Fields */}
                     {!isLand && (
                         <>
                             <div>
@@ -188,7 +216,6 @@ const PropertyDetails: React.FC = () => {
                     )}
                 </div>
 
-                {/* Additional Details Grid */}
                 <div className="mt-6 grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
                     <div className="flex justify-between border-b border-gray-100 pb-2">
                         <span className="text-gray-500">Listed By</span>
@@ -240,11 +267,11 @@ const PropertyDetails: React.FC = () => {
 
                     {!isOwner && !isInactive && (
                         <div className="flex gap-3">
-                            <button onClick={handleStartChat} className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 flex items-center justify-center gap-2">
+                            <button onClick={handleStartChat} className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md">
                                 <MessageSquare size={18} /> Chat
                             </button>
                             {property.contactNumber ? (
-                                <a href={`tel:${property.contactNumber}`} className="flex-1 bg-gray-900 text-white py-3 rounded-xl font-bold hover:bg-gray-800 flex items-center justify-center gap-2">
+                                <a href={`tel:${property.contactNumber}`} className="flex-1 bg-gray-900 text-white py-3 rounded-xl font-bold hover:bg-gray-800 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md">
                                     <Phone size={18} /> Call
                                 </a>
                             ) : (
