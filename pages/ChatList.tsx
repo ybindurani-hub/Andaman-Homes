@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { db, auth } from '../firebase';
-import { MessageSquare, Clock, ArrowRight } from 'lucide-react';
+import { MessageSquare, Clock, ArrowRight, Check, CheckCheck } from 'lucide-react';
 
 interface ChatRoom {
   id: string;
@@ -10,6 +10,7 @@ interface ChatRoom {
   propertyTitle?: string;
   lastMessage?: string;
   lastMessageTimestamp?: any;
+  lastSenderId?: string;
 }
 
 const ChatList: React.FC = () => {
@@ -38,6 +39,16 @@ const ChatList: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
+  const formatTime = (timestamp: any) => {
+      if (!timestamp) return '';
+      const date = timestamp.toDate();
+      const now = new Date();
+      if (date.toDateString() === now.toDateString()) {
+          return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
+
   if (loading) {
      return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -48,48 +59,56 @@ const ChatList: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-            <MessageSquare className="text-brand-600" /> Your Messages
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <h1 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+            <MessageSquare className="text-brand-600" size={24} /> 
+            Messages
         </h1>
 
         {chats.length === 0 ? (
-           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-               <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                   <MessageSquare className="text-gray-400" size={32} />
+           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
+               <div className="mx-auto w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                   <MessageSquare className="text-gray-300" size={32} />
                </div>
-               <h3 className="text-lg font-medium text-gray-900">No messages yet</h3>
-               <p className="text-gray-500 mt-2">Start a conversation with a property owner to see it here.</p>
-               <Link to="/" className="mt-6 inline-block bg-brand-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-brand-700">
-                   Browse Properties
+               <h3 className="text-lg font-bold text-gray-900">No chats yet</h3>
+               <p className="text-gray-500 mt-2 text-sm">When you chat with owners, they'll appear here.</p>
+               <Link to="/" className="mt-6 inline-block bg-brand-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-brand-700 transition-all">
+                   Find Properties
                </Link>
            </div>
         ) : (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
                 {chats.map((chat) => (
                     <Link 
                         key={chat.id} 
                         to={`/chat/${chat.id}`}
-                        className="block p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors last:border-none"
+                        className="block p-4 hover:bg-gray-50 transition-colors group"
                     >
-                        <div className="flex justify-between items-start">
+                        <div className="flex gap-4 items-center">
+                             <div className="w-12 h-12 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 font-bold text-lg border border-brand-100 flex-shrink-0">
+                                 {chat.propertyTitle?.charAt(0) || 'P'}
+                             </div>
+                             
                              <div className="flex-1 min-w-0">
-                                <h3 className="text-sm font-bold text-gray-900 truncate">
-                                    {chat.propertyTitle || "Property Inquiry"}
-                                </h3>
-                                <p className="text-sm text-gray-600 truncate mt-1">
-                                    {chat.lastMessage || <span className="italic text-gray-400">No messages yet</span>}
-                                </p>
-                             </div>
-                             <div className="ml-4 flex flex-col items-end flex-shrink-0">
-                                <ArrowRight size={16} className="text-gray-300 mb-2" />
-                                {chat.lastMessageTimestamp && (
-                                    <span className="text-xs text-gray-400 flex items-center gap-1">
-                                        <Clock size={10} />
-                                        {new Date(chat.lastMessageTimestamp?.toDate()).toLocaleDateString()}
+                                <div className="flex justify-between items-baseline mb-1">
+                                    <h3 className="text-sm font-bold text-gray-900 truncate pr-2">
+                                        {chat.propertyTitle || "Property Inquiry"}
+                                    </h3>
+                                    <span className="text-[10px] font-medium text-gray-400 whitespace-nowrap">
+                                        {formatTime(chat.lastMessageTimestamp)}
                                     </span>
-                                )}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    {chat.lastSenderId === auth.currentUser?.uid && (
+                                        <Check size={14} className="text-gray-400 flex-shrink-0" />
+                                    )}
+                                    <p className="text-xs text-gray-500 truncate">
+                                        {chat.lastMessage || <span className="italic opacity-60">Tap to start chatting</span>}
+                                    </p>
+                                </div>
                              </div>
+                             
+                             <ArrowRight size={16} className="text-gray-200 group-hover:text-brand-400 transition-colors" />
                         </div>
                     </Link>
                 ))}
