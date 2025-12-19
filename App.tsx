@@ -14,9 +14,9 @@ import MyAds from './pages/MyAds';
 import { auth, db } from './firebase';
 import firebase from 'firebase/compat/app';
 import { BannerAd } from './components/AdSpaces';
-import { Loader2, Bell, X, MessageCircle, Home as HomeIcon } from 'lucide-react';
+import { Loader2, MessageCircle, Home as HomeIcon, X } from 'lucide-react';
 
-export const ensureUserRecord = async (user: firebase.User, additionalData = {}) => {
+export const ensureUserRecord = async (user: firebase.User) => {
   if (!user) return;
   const userRef = db.collection('users').doc(user.uid);
   try {
@@ -27,121 +27,49 @@ export const ensureUserRecord = async (user: firebase.User, additionalData = {})
         email: user.email || null,
         phoneNumber: user.phoneNumber || null,
         displayName: user.displayName || 'User',
-        photoURL: user.photoURL || null,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         freeAdsUsed: 0,
         adsPosted: 0,
-        ...additionalData
       });
     }
   } catch (error) {
-    console.error("User record creation error:", error);
+    console.error("User record sync error:", error);
   }
-};
-
-const ScrollToTop = () => {
-  const { pathname } = useLocation();
-  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
-  return null;
 };
 
 const SplashScreen = () => (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-white">
-        <div className="flex flex-col items-center animate-pulse">
-            <div className="bg-brand-500 text-white p-4 rounded-3xl mb-4 shadow-lg shadow-brand-200">
-                <HomeIcon size={48} />
-            </div>
+        <div className="animate-pulse flex flex-col items-center">
+            <div className="bg-brand-500 text-white p-4 rounded-3xl mb-4 shadow-lg"><HomeIcon size={48} /></div>
             <h1 className="text-2xl font-black text-gray-900 tracking-tight">ANDAMAN <span className="text-brand-600">HOMES</span></h1>
             <div className="mt-8 flex items-center gap-2 text-gray-400">
                 <Loader2 className="animate-spin" size={20} />
-                <span className="text-xs font-bold uppercase tracking-widest">Initialising Secure Session</span>
+                <span className="text-xs font-bold uppercase tracking-widest">Loading Listings...</span>
             </div>
         </div>
     </div>
 );
-
-const NotificationToast = ({ notification, onClose, onClick }: any) => (
-    <div className="fixed top-4 left-4 right-4 z-[100] md:left-auto md:w-80 animate-in slide-in-from-top duration-300">
-        <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 flex items-center gap-4 cursor-pointer active:scale-95 transition-transform" onClick={onClick}>
-            <div className="w-12 h-12 rounded-full bg-brand-500 flex items-center justify-center text-white flex-shrink-0">
-                <MessageCircle size={24} />
-            </div>
-            <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-brand-600 uppercase tracking-wider">New Message</p>
-                <h4 className="text-sm font-bold text-gray-900 truncate">{notification.propertyTitle}</h4>
-                <p className="text-xs text-gray-500 truncate">{notification.lastMessage}</p>
-            </div>
-            <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="p-1 hover:bg-gray-100 rounded-full text-gray-400">
-                <X size={18} />
-            </button>
-        </div>
-    </div>
-);
-
-const AuthHandler = ({ setUser, setLoading }: any) => {
-    const location = useLocation();
-    const navigate = useNavigate();
-    const [notification, setNotification] = useState<any>(null);
-    const isFirstLoad = useRef(true);
-
-    useEffect(() => {
-        // Safety timeout to prevent infinite loading screen
-        const timer = setTimeout(() => {
-            setLoading(false);
-        }, 5000);
-
-        const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
-            clearTimeout(timer);
-            if (currentUser) {
-                await ensureUserRecord(currentUser);
-                setUser(currentUser);
-
-                // Listen to relevant messages
-                const chatUnsubscribe = db.collection('chats')
-                    .where('participants', 'array-contains', currentUser.uid)
-                    .onSnapshot(snapshot => {
-                        snapshot.docChanges().forEach(change => {
-                            if (change.type === 'modified') {
-                                const data = change.doc.data();
-                                const isFromOthers = data.lastSenderId !== currentUser.uid;
-                                const isNotCurrentChat = !location.pathname.includes(change.doc.id);
-
-                                if (isFromOthers && isNotCurrentChat && !isFirstLoad.current) {
-                                    setNotification({ ...data, id: change.doc.id });
-                                    setTimeout(() => setNotification(null), 6000);
-                                }
-                            }
-                        });
-                        isFirstLoad.current = false;
-                    }, err => console.log("Chat listener inhibited"));
-                
-                setLoading(false);
-                return () => chatUnsubscribe();
-            } else {
-                setUser(null);
-                setLoading(false);
-            }
-        });
-        return () => unsubscribe();
-    }, [location.pathname]);
-
-    return notification ? (
-        <NotificationToast 
-            notification={notification} 
-            onClose={() => setNotification(null)} 
-            onClick={() => { setNotification(null); navigate(`/chat/${notification.id}`); }} 
-        />
-    ) : null;
-};
 
 const ProtectedRoute = ({ children, user, loading }: any) => {
     if (loading) return <SplashScreen />;
     return user ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
-const PublicRoute = ({ children, user, loading }: any) => {
-    if (loading) return <SplashScreen />;
-    return user ? <Navigate to="/" replace /> : <>{children}</>;
+const AuthHandler = ({ setUser, setLoading }: any) => {
+    const location = useLocation();
+    useEffect(() => {
+        const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
+            if (currentUser) {
+                await ensureUserRecord(currentUser);
+                setUser(currentUser);
+            } else {
+                setUser(null);
+            }
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+    return null;
 };
 
 const App: React.FC = () => {
@@ -150,21 +78,23 @@ const App: React.FC = () => {
 
   return (
     <Router>
-      <ScrollToTop />
       <AuthHandler setUser={setUser} setLoading={setLoading} />
       <div className="min-h-screen bg-gray-50 font-sans text-slate-900 pb-20 md:pb-0">
         <Navbar />
         <BannerAd position="top" />
         <Routes>
-          <Route path="/" element={<ProtectedRoute user={user} loading={loading}><Home /></ProtectedRoute>} />
-          <Route path="/login" element={<PublicRoute user={user} loading={loading}><Login /></PublicRoute>} />
-          <Route path="/signup" element={<PublicRoute user={user} loading={loading}><Signup /></PublicRoute>} />
+          {/* PUBLIC ROUTES */}
+          <Route path="/" element={<Home />} />
+          <Route path="/property/:id" element={<PropertyDetails />} />
+          <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
+          <Route path="/signup" element={user ? <Navigate to="/" /> : <Signup />} />
+
+          {/* PROTECTED ROUTES */}
           <Route path="/add-property" element={<ProtectedRoute user={user} loading={loading}><AddProperty /></ProtectedRoute>} />
           <Route path="/my-ads" element={<ProtectedRoute user={user} loading={loading}><MyAds /></ProtectedRoute>} />
-          <Route path="/payment" element={<ProtectedRoute user={user} loading={loading}><PaymentPage /></ProtectedRoute>} />
           <Route path="/chats" element={<ProtectedRoute user={user} loading={loading}><ChatList /></ProtectedRoute>} />
           <Route path="/chat/:chatId" element={<ProtectedRoute user={user} loading={loading}><ChatScreen /></ProtectedRoute>} />
-          <Route path="/property/:id" element={<ProtectedRoute user={user} loading={loading}><PropertyDetails /></ProtectedRoute>} />
+          <Route path="/payment" element={<ProtectedRoute user={user} loading={loading}><PaymentPage /></ProtectedRoute>} />
         </Routes>
         <BannerAd position="bottom" />
       </div>

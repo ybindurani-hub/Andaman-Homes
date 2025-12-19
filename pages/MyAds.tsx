@@ -16,8 +16,8 @@ const MyAds: React.FC = () => {
       if (!auth.currentUser) return;
 
       try {
-        // Updated to use 'posts' collection
-        const querySnapshot = await db.collection("posts")
+        // Changed collection name to 'properties'
+        const querySnapshot = await db.collection("properties")
             .where("ownerId", "==", auth.currentUser.uid)
             .get();
         
@@ -52,8 +52,8 @@ const MyAds: React.FC = () => {
   const handleDeleteProperty = async (id: string) => {
       if (window.confirm("Are you sure you want to delete this ad permanently?")) {
           try {
-              // Updated to use 'posts' collection
-              await db.collection("posts").doc(id).delete();
+              // Changed collection name to 'properties'
+              await db.collection("properties").doc(id).delete();
               setProperties(prev => prev.filter(p => p.id !== id));
           } catch (error) {
               console.error("Error deleting property:", error);

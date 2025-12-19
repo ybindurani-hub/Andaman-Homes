@@ -23,8 +23,8 @@ const PaymentPage: React.FC = () => {
         try {
             if (!auth.currentUser) return;
 
-            // 1. Save the Property to 'posts' collection
-            await db.collection("posts").add({
+            // 1. Save the Property to 'properties' collection
+            await db.collection("properties").add({
                 ...propertyData,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });

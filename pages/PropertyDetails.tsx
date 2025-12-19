@@ -4,7 +4,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebase';
 import firebase from 'firebase/compat/app';
 import { Property } from '../types';
-import { MapPin, BedDouble, Bath, Ruler, CheckCircle, ArrowLeft, Phone, Tag, MessageSquare, ImageOff, Trash2, Building, Car, Compass, User, ShieldAlert } from 'lucide-react';
+import { MapPin, BedDouble, Bath, Ruler, CheckCircle, ArrowLeft, Phone, Tag, MessageSquare, ImageOff, ShieldAlert, Trash2, Loader2 } from 'lucide-react';
 
 const PropertyDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -12,87 +12,47 @@ const PropertyDetails: React.FC = () => {
   const [property, setProperty] = useState<Property | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeImage, setActiveImage] = useState<string>('');
-  const [allImages, setAllImages] = useState<string[]>([]);
+  const [activeImage, setActiveImage] = useState('');
   const [isOwner, setIsOwner] = useState(false);
-  const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
     const fetchProperty = async () => {
       if (!id) return;
       try {
         setLoading(true);
-        // Updated to use 'posts' collection
-        const docRef = db.collection("posts").doc(id);
-        const docSnap = await docRef.get();
-        
-        if (docSnap.exists) {
-          const data = { id: docSnap.id, ...docSnap.data() } as Property;
+        // Changed collection name to 'properties'
+        const doc = await db.collection("properties").doc(id).get();
+        if (doc.exists) {
+          const data = { id: doc.id, ...doc.data() } as Property;
           setProperty(data);
-          
-          if (auth.currentUser && data.ownerId === auth.currentUser.uid) {
-            setIsOwner(true);
-          }
-
-          const images = data.imageUrls && data.imageUrls.length > 0 
-            ? data.imageUrls 
-            : data.imageUrl ? [data.imageUrl] : [];
-          
-          setAllImages(images);
-          if (images.length > 0) setActiveImage(images[0]);
-          setError(null);
+          if (auth.currentUser && data.ownerId === auth.currentUser.uid) setIsOwner(true);
+          const images = data.imageUrls && data.imageUrls.length > 0 ? data.imageUrls : [data.imageUrl];
+          setActiveImage(images[0]);
         } else {
-            setError("Property listing not found.");
+          setError("Listing not found.");
         }
-      } catch (err: any) {
-        console.error("Error fetching details:", err);
-        if (err.message.includes("permission-denied")) {
-            setError("You do not have permission to view this property.");
-        } else {
-            setError("Failed to load property details.");
-        }
+      } catch (err) {
+        setError("Error loading property details.");
       } finally {
         setLoading(false);
       }
     };
-
     fetchProperty();
   }, [id]);
-
-  const updateStatus = async (newStatus: 'sold' | 'rented' | 'occupied' | 'active') => {
-      if (!id) return;
-      try {
-          await db.collection("posts").doc(id).update({ status: newStatus });
-          setProperty(prev => prev ? { ...prev, status: newStatus } : null);
-      } catch (err) {
-          alert("Failed to update status. Only the owner can perform this action.");
-      }
-  };
-
-  const deleteProperty = async () => {
-      if (!id || !window.confirm("Permanently delete this ad?")) return;
-      try {
-          await db.collection("posts").doc(id).delete();
-          navigate('/my-ads');
-      } catch (err) {
-          alert("Failed to delete ad.");
-      }
-  };
 
   const handleStartChat = async () => {
     if (!auth.currentUser) return navigate('/login');
     if (!property) return;
-    if (property.ownerId === auth.currentUser.uid) return alert("You cannot chat with yourself!");
+    if (property.ownerId === auth.currentUser.uid) return alert("You posted this ad.");
 
-    const uids = [auth.currentUser.uid, property.ownerId].sort();
-    const chatId = uids.join('_');
+    const chatId = [auth.currentUser.uid, property.ownerId].sort().join('_');
     const chatRef = db.collection('chats').doc(chatId);
     
     try {
-        const chatDoc = await chatRef.get();
-        if (!chatDoc.exists) {
+        const doc = await chatRef.get();
+        if (!doc.exists) {
             await chatRef.set({
-                participants: uids,
+                participants: [auth.currentUser.uid, property.ownerId].sort(),
                 propertyId: property.id,
                 propertyTitle: property.title,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -102,63 +62,38 @@ const PropertyDetails: React.FC = () => {
         }
         navigate(`/chat/${chatId}`);
     } catch (err) {
-        alert("Failed to start chat. Please check your permissions.");
+        alert("Unable to start chat. Check your internet.");
     }
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center"><div className="animate-spin h-8 w-8 border-4 border-brand-500 rounded-full border-t-transparent"></div></div>;
-  
-  if (error) {
-      return (
-          <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 text-center">
-              <ShieldAlert className="text-red-500 mb-4" size={48} />
-              <h1 className="text-xl font-bold text-gray-900 mb-2">{error}</h1>
-              <Link to="/" className="text-brand-600 font-bold hover:underline">Back to Browse</Link>
-          </div>
-      );
-  }
-
-  if (!property) return null;
-
-  const isInactive = property.status && property.status !== 'active';
-  const sqMeters = property.area ? (property.area * 0.092903).toFixed(1) : '0';
-  const isLand = property.propertyType === 'land';
+  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-500" size={40} /></div>;
+  if (error || !property) return (
+      <div className="h-screen flex flex-col items-center justify-center p-6 text-center">
+          <ShieldAlert className="text-red-500 mb-4" size={48} />
+          <h1 className="text-xl font-bold mb-4">{error || "Property not found"}</h1>
+          <Link to="/" className="text-brand-600 font-bold">Back to Home</Link>
+      </div>
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <Link to="/" className="inline-flex items-center text-gray-500 hover:text-gray-900 mb-4 transition-colors">
-            <ArrowLeft size={18} className="mr-1" /> Back
-        </Link>
-        
-        {isOwner && (
-            <div className="bg-white p-4 rounded-xl mb-4 border border-gray-200 shadow-sm flex flex-wrap gap-3 items-center">
-                <span className="text-xs font-bold text-gray-500 uppercase mr-2">Owner Controls:</span>
-                {property.status === 'active' ? (
-                     <>
-                        <button onClick={() => updateStatus('sold')} className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200">Mark Sold/Rented</button>
-                        <button onClick={deleteProperty} className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200">Delete Ad</button>
-                     </>
-                ) : (
-                    <button onClick={() => updateStatus('active')} className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200">Re-activate Ad</button>
-                )}
-            </div>
-        )}
+        <button onClick={() => navigate(-1)} className="flex items-center text-gray-500 mb-4 font-bold uppercase text-xs tracking-widest"><ArrowLeft size={16} className="mr-1" /> Back</button>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-4">
-                <div className="aspect-video bg-black rounded-xl overflow-hidden relative flex items-center justify-center">
-                     {allImages.length > 0 && !imgError ? (
-                         <img src={activeImage} className={`w-full h-full object-contain ${isInactive ? 'opacity-50 grayscale' : ''}`} onError={() => setImgError(true)} />
-                     ) : (
-                         <div className="text-white flex flex-col items-center"><ImageOff size={32} />No Image</div>
+                <div className="aspect-video bg-black rounded-3xl overflow-hidden relative">
+                     <img src={activeImage} className="w-full h-full object-contain" />
+                     {property.status && property.status !== 'active' && (
+                         <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                             <span className="bg-red-600 text-white px-8 py-2 rounded-full font-black uppercase text-xl transform -rotate-12">{property.status}</span>
+                         </div>
                      )}
-                     {isInactive && <div className="absolute inset-0 flex items-center justify-center"><span className="bg-red-600 text-white px-6 py-2 rounded-full font-bold transform -rotate-12">{property.status?.toUpperCase()}</span></div>}
                 </div>
-                {allImages.length > 1 && (
-                    <div className="flex gap-2 overflow-x-auto pb-2">
-                        {allImages.map((img, i) => (
-                            <button key={i} onClick={() => setActiveImage(img)} className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 ${activeImage === img ? 'border-brand-500' : 'border-transparent'}`}>
+                {property.imageUrls && property.imageUrls.length > 1 && (
+                    <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                        {property.imageUrls.map((img, i) => (
+                            <button key={i} onClick={() => setActiveImage(img)} className={`w-20 h-20 rounded-xl overflow-hidden border-2 flex-shrink-0 ${activeImage === img ? 'border-brand-500' : 'border-transparent'}`}>
                                 <img src={img} className="w-full h-full object-cover" />
                             </button>
                         ))}
@@ -166,118 +101,53 @@ const PropertyDetails: React.FC = () => {
                 )}
             </div>
 
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 h-fit">
-                <div className="flex justify-between items-start">
+            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+                <div className="flex justify-between items-start mb-6">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900 leading-tight">{property.title}</h1>
-                        <div className="flex items-center text-gray-500 mt-2 text-sm">
-                            <MapPin size={16} className="mr-1" /> {property.address}
+                        <h1 className="text-2xl font-black text-gray-900 mb-2">{property.title}</h1>
+                        <p className="flex items-center text-gray-500 text-sm"><MapPin size={16} className="mr-1 text-brand-500" /> {property.address}</p>
+                    </div>
+                    <span className="bg-brand-50 text-brand-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest">{property.category}</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4 mb-8 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                    <div className="text-center">
+                        <Ruler className="mx-auto text-brand-500 mb-1" size={20} />
+                        <p className="text-sm font-black">{property.area} <span className="text-[10px] text-gray-400 font-bold">Sqft</span></p>
+                    </div>
+                    {property.bedrooms && (
+                        <div className="text-center">
+                            <BedDouble className="mx-auto text-brand-500 mb-1" size={20} />
+                            <p className="text-sm font-black">{property.bedrooms} <span className="text-[10px] text-gray-400 font-bold">BHK</span></p>
                         </div>
+                    )}
+                    <div className="text-center">
+                        <Tag className="mx-auto text-brand-500 mb-1" size={20} />
+                        <p className="text-sm font-black capitalize">{property.listedBy || 'Owner'}</p>
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${property.category === 'sale' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
-                        {property.category === 'sale' ? 'For Sale' : 'For Rent'}
-                    </span>
                 </div>
 
-                <div className="mt-6 p-4 bg-gray-50 rounded-xl border border-gray-200 grid grid-cols-3 gap-4 text-center">
-                    <div>
-                        <div className="flex items-center justify-center text-brand-600 mb-1"><Ruler size={20} /></div>
-                        <div className="font-bold text-gray-900">{property.area}</div>
-                        <div className="text-[10px] text-gray-500 uppercase">Sq. Ft</div>
-                    </div>
-                    
-                    {!isLand && (
-                        <>
-                            <div>
-                                <div className="flex items-center justify-center text-brand-600 mb-1"><BedDouble size={20} /></div>
-                                <div className="font-bold text-gray-900">{property.bedrooms}</div>
-                                <div className="text-[10px] text-gray-500 uppercase">Bedrooms</div>
-                            </div>
-                            <div>
-                                <div className="flex items-center justify-center text-brand-600 mb-1"><Bath size={20} /></div>
-                                <div className="font-bold text-gray-900">{property.bathrooms}</div>
-                                <div className="text-[10px] text-gray-500 uppercase">Bathrooms</div>
-                            </div>
-                        </>
-                    )}
-
-                    {isLand && (
-                        <>
-                             <div>
-                                <div className="flex items-center justify-center text-brand-600 mb-1"><Compass size={20} /></div>
-                                <div className="font-bold text-gray-900 capitalize">{property.facing || 'N/A'}</div>
-                                <div className="text-[10px] text-gray-500 uppercase">Facing</div>
-                            </div>
-                            <div>
-                                <div className="flex items-center justify-center text-brand-600 mb-1"><Tag size={20} /></div>
-                                <div className="font-bold text-gray-900">{sqMeters}</div>
-                                <div className="text-[10px] text-gray-500 uppercase">Sq. Mtrs</div>
-                            </div>
-                        </>
-                    )}
-                </div>
-
-                <div className="mt-6 grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
-                    <div className="flex justify-between border-b border-gray-100 pb-2">
-                        <span className="text-gray-500">Listed By</span>
-                        <span className="font-medium capitalize text-gray-900">{property.listedBy || 'Owner'}</span>
-                    </div>
-                    {!isLand && (
-                        <>
-                            <div className="flex justify-between border-b border-gray-100 pb-2">
-                                <span className="text-gray-500">Furnishing</span>
-                                <span className="font-medium capitalize text-gray-900">{property.furnishing || 'N/A'}</span>
-                            </div>
-                            <div className="flex justify-between border-b border-gray-100 pb-2">
-                                <span className="text-gray-500">Floor</span>
-                                <span className="font-medium text-gray-900">{property.floorNumber ? `${property.floorNumber} of ${property.totalFloors||'-'}` : 'N/A'}</span>
-                            </div>
-                            <div className="flex justify-between border-b border-gray-100 pb-2">
-                                <span className="text-gray-500">Parking</span>
-                                <span className="font-medium capitalize text-gray-900">{property.parking || 'None'}</span>
-                            </div>
-                        </>
-                    )}
-                </div>
-
-                <div className="mt-6">
-                    <h3 className="font-bold text-gray-900 mb-2">Description</h3>
+                <div className="mb-8">
+                    <h3 className="font-black uppercase text-[10px] tracking-[0.2em] text-gray-400 mb-3">Description</h3>
                     <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{property.description}</p>
                 </div>
 
-                {property.amenities?.length > 0 && (
-                    <div className="mt-6">
-                        <h3 className="font-bold text-gray-900 mb-2">Amenities</h3>
-                        <div className="flex flex-wrap gap-2">
-                            {property.amenities.map(a => (
-                                <span key={a} className="bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded-md flex items-center">
-                                    <CheckCircle size={10} className="mr-1 text-brand-500" /> {a}
-                                </span>
-                            ))}
-                        </div>
+                <div className="pt-6 border-t border-gray-100 flex items-center justify-between gap-4">
+                    <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Fixed Price</p>
+                        <p className="text-3xl font-black text-brand-700">₹ {property.price.toLocaleString('en-IN')}</p>
                     </div>
-                )}
-
-                <div className="mt-8 pt-6 border-t border-gray-100">
-                    <div className="flex items-center justify-between mb-4">
-                        <div>
-                            <p className="text-xs text-gray-500">Price</p>
-                            <p className="text-3xl font-bold text-brand-700">₹ {property.price.toLocaleString('en-IN')}</p>
-                        </div>
-                    </div>
-
-                    {!isOwner && !isInactive && (
-                        <div className="flex gap-3">
-                            <button onClick={handleStartChat} className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md">
-                                <MessageSquare size={18} /> Chat
-                            </button>
-                            {property.contactNumber ? (
-                                <a href={`tel:${property.contactNumber}`} className="flex-1 bg-gray-900 text-white py-3 rounded-xl font-bold hover:bg-gray-800 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md">
-                                    <Phone size={18} /> Call
-                                </a>
-                            ) : (
-                                <button disabled className="flex-1 bg-gray-100 text-gray-400 py-3 rounded-xl font-bold cursor-not-allowed">Number Hidden</button>
-                            )}
+                    
+                    {!isOwner && (
+                        <div className="flex gap-2">
+                             <button onClick={handleStartChat} className="bg-brand-600 text-white p-4 rounded-2xl shadow-lg hover:bg-brand-700 transition-all active:scale-95">
+                                 <MessageSquare size={24} />
+                             </button>
+                             {property.contactNumber && (
+                                 <a href={`tel:${property.contactNumber}`} className="bg-gray-900 text-white p-4 rounded-2xl shadow-lg hover:bg-black transition-all active:scale-95">
+                                     <Phone size={24} />
+                                 </a>
+                             )}
                         </div>
                     )}
                 </div>
