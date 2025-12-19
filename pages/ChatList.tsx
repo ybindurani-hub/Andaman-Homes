@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { db, auth } from '../firebase';
-import { MessageSquare, Clock, ArrowRight, Check, CheckCheck } from 'lucide-react';
+import { MessageSquare, Clock, ArrowRight, Check, CheckCheck, Loader2 } from 'lucide-react';
 
 interface ChatRoom {
   id: string;
@@ -16,23 +16,33 @@ interface ChatRoom {
 const ChatList: React.FC = () => {
   const [chats, setChats] = useState<ChatRoom[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!auth.currentUser) return;
 
-    // Listen to chats where user is a participant
+    // Fixed query: removed orderBy to avoid missing index errors. 
+    // We will sort in-memory instead for maximum reliability.
     const unsubscribe = db.collection('chats')
       .where('participants', 'array-contains', auth.currentUser.uid)
-      .orderBy('lastMessageTimestamp', 'desc')
       .onSnapshot((snapshot) => {
         const rooms: ChatRoom[] = [];
         snapshot.forEach(doc => {
           rooms.push({ id: doc.id, ...doc.data() } as ChatRoom);
         });
+
+        // IN-MEMORY SORT BY TIMESTAMP
+        rooms.sort((a, b) => {
+            const timeA = a.lastMessageTimestamp?.toMillis ? a.lastMessageTimestamp.toMillis() : 0;
+            const timeB = b.lastMessageTimestamp?.toMillis ? b.lastMessageTimestamp.toMillis() : 0;
+            return timeB - timeA;
+        });
+
         setChats(rooms);
         setLoading(false);
-      }, (error) => {
-         console.error("Error fetching chats:", error);
+      }, (err) => {
+         console.error("Chat fetch error:", err);
+         setError("Failed to load your chats. Check your connection.");
          setLoading(false);
       });
 
@@ -41,7 +51,7 @@ const ChatList: React.FC = () => {
 
   const formatTime = (timestamp: any) => {
       if (!timestamp) return '';
-      const date = timestamp.toDate();
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
       const now = new Date();
       if (date.toDateString() === now.toDateString()) {
           return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -52,7 +62,7 @@ const ChatList: React.FC = () => {
   if (loading) {
      return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-            <div className="h-8 w-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+            <Loader2 className="animate-spin text-brand-500" size={32} />
         </div>
      );
   }
@@ -65,50 +75,57 @@ const ChatList: React.FC = () => {
             Messages
         </h1>
 
-        {chats.length === 0 ? (
+        {error ? (
+           <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-8 text-center">
+               <p className="text-red-500 font-medium mb-4">{error}</p>
+               <button onClick={() => window.location.reload()} className="bg-brand-600 text-white px-6 py-2 rounded-xl font-bold">Retry</button>
+           </div>
+        ) : chats.length === 0 ? (
            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
-               <div className="mx-auto w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                   <MessageSquare className="text-gray-300" size={32} />
+               <div className="mx-auto w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4 text-gray-300">
+                   <MessageSquare size={32} />
                </div>
-               <h3 className="text-lg font-bold text-gray-900">No chats yet</h3>
-               <p className="text-gray-500 mt-2 text-sm">When you chat with owners, they'll appear here.</p>
-               <Link to="/" className="mt-6 inline-block bg-brand-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-brand-700 transition-all">
-                   Find Properties
+               <h3 className="text-lg font-bold text-gray-900">No conversations</h3>
+               <p className="text-gray-500 mt-2 text-sm">Find a property and contact the owner to start chatting.</p>
+               <Link to="/" className="mt-6 inline-block bg-brand-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-100">
+                   Browse Properties
                </Link>
            </div>
         ) : (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
                 {chats.map((chat) => (
                     <Link 
                         key={chat.id} 
                         to={`/chat/${chat.id}`}
-                        className="block p-4 hover:bg-gray-50 transition-colors group"
+                        className="block p-5 hover:bg-gray-50 transition-colors group"
                     >
                         <div className="flex gap-4 items-center">
-                             <div className="w-12 h-12 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 font-bold text-lg border border-brand-100 flex-shrink-0">
+                             <div className="w-14 h-14 rounded-2xl bg-brand-50 flex items-center justify-center text-brand-600 font-bold text-xl border border-brand-100 flex-shrink-0">
                                  {chat.propertyTitle?.charAt(0) || 'P'}
                              </div>
                              
                              <div className="flex-1 min-w-0">
                                 <div className="flex justify-between items-baseline mb-1">
-                                    <h3 className="text-sm font-bold text-gray-900 truncate pr-2">
+                                    <h3 className="text-sm font-black text-gray-900 truncate pr-2">
                                         {chat.propertyTitle || "Property Inquiry"}
                                     </h3>
-                                    <span className="text-[10px] font-medium text-gray-400 whitespace-nowrap">
+                                    <span className="text-[10px] font-bold text-gray-400 whitespace-nowrap uppercase tracking-tighter">
                                         {formatTime(chat.lastMessageTimestamp)}
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-1">
                                     {chat.lastSenderId === auth.currentUser?.uid && (
-                                        <Check size={14} className="text-gray-400 flex-shrink-0" />
+                                        <Check size={14} className="text-brand-500 flex-shrink-0" />
                                     )}
-                                    <p className="text-xs text-gray-500 truncate">
-                                        {chat.lastMessage || <span className="italic opacity-60">Tap to start chatting</span>}
+                                    <p className="text-xs text-gray-500 truncate font-medium">
+                                        {chat.lastMessage || <span className="italic opacity-60">Start a conversation...</span>}
                                     </p>
                                 </div>
                              </div>
                              
-                             <ArrowRight size={16} className="text-gray-200 group-hover:text-brand-400 transition-colors" />
+                             <div className="bg-gray-50 p-2 rounded-full text-gray-300 group-hover:text-brand-500 group-hover:bg-brand-50 transition-all">
+                                <ArrowRight size={16} />
+                             </div>
                         </div>
                     </Link>
                 ))}

@@ -3,11 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { auth } from '../firebase';
 import firebase from 'firebase/compat/app';
-import { Home, Plus, LogOut, User as UserIcon, MessageSquare, Menu, X, Search, Heart, List } from 'lucide-react';
+import { Home, Plus, LogOut, User as UserIcon, MessageSquare, Menu, X, Search, Heart, List, Settings } from 'lucide-react';
 
 const Navbar: React.FC = () => {
   const [user, setUser] = useState<firebase.User | null>(null);
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -17,20 +16,6 @@ const Navbar: React.FC = () => {
     });
     return () => unsubscribe();
   }, []);
-
-  const handleLogoutClick = () => {
-    setShowLogoutConfirm(true);
-  };
-
-  const confirmLogout = async () => {
-    try {
-      await auth.signOut();
-      setShowLogoutConfirm(false);
-      navigate('/login');
-    } catch (error) {
-      console.error("Error logging out:", error);
-    }
-  };
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -80,17 +65,10 @@ const Navbar: React.FC = () => {
                     Sell
                   </Link>
                   <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-200">
-                    <div className="flex items-center gap-1 text-sm text-gray-700 font-medium">
+                    <Link to="/account" className="flex items-center gap-1 text-sm text-gray-700 font-medium hover:text-brand-600 transition-colors">
                        <UserIcon size={16} className="text-gray-400" />
                        {getUserName()}
-                    </div>
-                    <button 
-                      onClick={handleLogoutClick}
-                      className="text-gray-500 hover:text-red-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
-                      title="Logout"
-                    >
-                      <LogOut size={20} />
-                    </button>
+                    </Link>
                   </div>
                 </>
               ) : (
@@ -156,43 +134,12 @@ const Navbar: React.FC = () => {
             </Link>
 
             {/* Account */}
-            {user ? (
-                <button onClick={handleLogoutClick} className={`flex flex-col items-center flex-1 py-1 text-gray-500`}>
-                    <UserIcon size={24} />
-                    <span className="text-[10px] font-medium mt-1">Logout</span>
-                </button>
-            ) : (
-                <Link to="/login" className={`flex flex-col items-center flex-1 py-1 ${isActive('/login') ? 'text-brand-600' : 'text-gray-500'}`}>
-                    <UserIcon size={24} strokeWidth={isActive('/login') ? 2.5 : 2} />
-                    <span className="text-[10px] font-medium mt-1">Account</span>
-                </Link>
-            )}
+            <Link to="/account" className={`flex flex-col items-center flex-1 py-1 ${isActive('/account') ? 'text-brand-600' : 'text-gray-500'}`}>
+                <UserIcon size={24} strokeWidth={isActive('/account') ? 2.5 : 2} />
+                <span className="text-[10px] font-medium mt-1">Account</span>
+            </Link>
         </div>
       </div>
-
-      {/* --- LOGOUT CONFIRMATION MODAL --- */}
-      {showLogoutConfirm && (
-        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm Logout</h3>
-            <p className="text-sm text-gray-600 mb-6">Are you sure you want to log out of Andaman Homes?</p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowLogoutConfirm(false)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmLogout}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg transition-colors shadow-sm"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 };

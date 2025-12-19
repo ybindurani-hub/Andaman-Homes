@@ -11,6 +11,7 @@ import PaymentPage from './pages/PaymentPage';
 import ChatList from './pages/ChatList';
 import ChatScreen from './pages/ChatScreen';
 import MyAds from './pages/MyAds';
+import Account from './pages/Account';
 import { auth, db } from './firebase';
 import firebase from 'firebase/compat/app';
 import { BannerAd } from './components/AdSpaces';
@@ -90,6 +91,7 @@ const App: React.FC = () => {
           <Route path="/signup" element={user ? <Navigate to="/" /> : <Signup />} />
 
           {/* PROTECTED ROUTES */}
+          <Route path="/account" element={<ProtectedRoute user={user} loading={loading}><Account /></ProtectedRoute>} />
           <Route path="/add-property" element={<ProtectedRoute user={user} loading={loading}><AddProperty /></ProtectedRoute>} />
           <Route path="/my-ads" element={<ProtectedRoute user={user} loading={loading}><MyAds /></ProtectedRoute>} />
           <Route path="/chats" element={<ProtectedRoute user={user} loading={loading}><ChatList /></ProtectedRoute>} />
