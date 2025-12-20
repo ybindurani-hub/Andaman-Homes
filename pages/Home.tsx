@@ -22,23 +22,16 @@ const Home: React.FC = () => {
       setError(null);
       
       console.log("1. Attempting fetch from collection: 'properties'");
-      const snapshot = await db.collection("properties").get();
+      // We only want active properties for the home feed
+      const snapshot = await db.collection("properties").where("status", "==", "active").get();
       
-      console.log(`2. Success! Found ${snapshot.size} total documents.`);
+      console.log(`2. Success! Found ${snapshot.size} active documents.`);
       
       const props: Property[] = [];
       snapshot.forEach((doc) => {
         const data = doc.data() as Property;
-        
-        // BE LENIENT: Show if status is missing, 'active', or anything except 'deleted'/'expired'
-        const isVisible = !data.status || data.status === 'active' || data.status === 'sold' || data.status === 'rented';
-        
-        if (isVisible) {
-          props.push({ id: doc.id, ...data });
-        }
+        props.push({ id: doc.id, ...data });
       });
-
-      console.log(`3. After filtering for active/visible: ${props.length} items.`);
 
       // Robust Sort: Handle missing createdAt
       props.sort((a, b) => {
@@ -54,7 +47,7 @@ const Home: React.FC = () => {
 
       setProperties(props);
       if (snapshot.size === 0) {
-          console.warn("⚠️ COLLECTION 'properties' IS EMPTY. Please check your Firebase Console.");
+          console.warn("⚠️ NO ACTIVE PROPERTIES FOUND.");
       }
     } catch (err: any) {
       console.error("❌ Firestore Fetch Error:", err);
@@ -162,14 +155,14 @@ const Home: React.FC = () => {
             <div className="bg-gray-50 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6">
                 <Info className="text-gray-300" size={48} />
             </div>
-            <h3 className="text-2xl font-black text-gray-900">No properties found</h3>
-            <p className="text-gray-500 mt-2 mb-8 text-sm">We checked the 'properties' collection and found no matching active listings.</p>
+            <h3 className="text-2xl font-black text-gray-900">No active listings</h3>
+            <p className="text-gray-500 mt-2 mb-8 text-sm">All properties are currently sold or rented. Check back later!</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <button onClick={fetchProperties} className="inline-flex items-center justify-center gap-2 bg-gray-100 text-gray-700 px-6 py-3 rounded-2xl font-bold hover:bg-gray-200">
                     <RefreshCw size={18} /> Refresh List
                 </button>
                 <Link to="/add-property" className="inline-flex items-center justify-center gap-2 bg-brand-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-brand-200 hover:bg-brand-700">
-                    <Plus size={20} /> Post First Listing
+                    <Plus size={20} /> Post Your Ad
                 </Link>
             </div>
           </div>

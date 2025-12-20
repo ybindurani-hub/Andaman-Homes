@@ -1,7 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Property } from '../types';
+import { db, auth } from '../firebase';
 import { MapPin, Heart, ImageOff, Trash2 } from 'lucide-react';
 
 interface PropertyCardProps {
@@ -15,6 +16,37 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onDelete }) => {
     property.imageUrls && property.imageUrls.length > 0 ? property.imageUrls[0] : property.imageUrl
   );
   const [imgError, setImgError] = useState(false);
+  const [isFavorited, setIsFavorited] = useState(false);
+
+  useEffect(() => {
+    if (!auth.currentUser || !property.id) return;
+    
+    const favRef = db.collection('users').doc(auth.currentUser.uid).collection('favorites').doc(property.id);
+    const unsubscribe = favRef.onSnapshot(doc => {
+      setIsFavorited(doc.exists);
+    });
+    return () => unsubscribe();
+  }, [property.id]);
+
+  const toggleFavorite = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!auth.currentUser) return navigate('/login');
+    
+    const favRef = db.collection('users').doc(auth.currentUser.uid).collection('favorites').doc(property.id);
+    
+    try {
+      if (isFavorited) {
+        await favRef.delete();
+      } else {
+        await favRef.set({
+          propertyId: property.id,
+          savedAt: new Date().getTime()
+        });
+      }
+    } catch (err) {
+      console.error("Error updating favorites:", err);
+    }
+  };
 
   const formatDate = (timestamp: any) => {
       if (!timestamp) return '';
@@ -37,8 +69,6 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onDelete }) => {
       e.stopPropagation();
       if (onDelete) onDelete();
   };
-
-  const sqMeters = Math.round(property.area * 0.092903);
 
   return (
     <div 
@@ -70,8 +100,11 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onDelete }) => {
                 </button>
             )}
 
-            <button className="absolute top-2 right-2 p-1.5 bg-white/90 rounded-full text-gray-800 hover:text-red-500 transition-colors shadow-sm z-10" onClick={(e) => e.stopPropagation()}>
-                <Heart size={16} />
+            <button 
+              className={`absolute top-2 right-2 p-1.5 bg-white/90 rounded-full transition-all shadow-sm z-10 ${isFavorited ? 'text-red-500' : 'text-gray-800 hover:text-red-500'}`}
+              onClick={toggleFavorite}
+            >
+                <Heart size={16} className={isFavorited ? 'fill-current' : ''} />
             </button>
 
             <div className={`absolute bottom-2 left-2 text-[8px] font-black px-2 py-0.5 rounded shadow-sm uppercase tracking-widest ${property.category === 'sale' ? 'bg-brand-600 text-white' : 'bg-yellow-400 text-black'}`}>
@@ -88,7 +121,7 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onDelete }) => {
                     {property.title}
                 </p>
                 <div className="text-[10px] text-gray-400 mt-2 flex flex-wrap items-center gap-2 font-bold uppercase tracking-wider">
-                     <span className="bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">{property.bedrooms} BHK</span>
+                     <span className="bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">{property.bedrooms || 0} BHK</span>
                      <span className="bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">{property.area} Sq.Ft</span>
                 </div>
             </div>

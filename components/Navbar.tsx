@@ -50,6 +50,10 @@ const Navbar: React.FC = () => {
               
               {user ? (
                 <>
+                  <Link to="/favorites" className="text-gray-600 hover:text-brand-600 px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1">
+                    <Heart size={18} className={isActive('/favorites') ? 'fill-red-500 text-red-500' : ''} />
+                    Saved
+                  </Link>
                   <Link to="/my-ads" className="text-gray-600 hover:text-brand-600 px-3 py-2 rounded-md text-sm font-medium transition-colors">
                     My Listings
                   </Link>
@@ -111,10 +115,10 @@ const Navbar: React.FC = () => {
                 <span className="text-[10px] font-medium mt-1">Home</span>
             </Link>
 
-            {/* Chats */}
-            <Link to="/chats" className={`flex flex-col items-center flex-1 py-1 ${isActive('/chats') ? 'text-brand-600' : 'text-gray-500'}`}>
-                <MessageSquare size={24} strokeWidth={isActive('/chats') ? 2.5 : 2} />
-                <span className="text-[10px] font-medium mt-1">Chats</span>
+            {/* Favorites */}
+            <Link to="/favorites" className={`flex flex-col items-center flex-1 py-1 ${isActive('/favorites') ? 'text-brand-600' : 'text-gray-500'}`}>
+                <Heart size={24} strokeWidth={isActive('/favorites') ? 2.5 : 2} className={isActive('/favorites') ? 'fill-red-500 text-red-500' : ''} />
+                <span className="text-[10px] font-medium mt-1">Saved</span>
             </Link>
 
             {/* SELL BUTTON (Floating) */}

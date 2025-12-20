@@ -11,13 +11,33 @@ import {
   Key, 
   HelpCircle, 
   ChevronRight, 
-  Phone, 
+  ChevronDown,
   Mail, 
-  MessageCircle, 
   Trash2,
   AlertCircle,
-  Loader2
+  Loader2,
+  ShieldCheck,
+  CheckCircle2
 } from 'lucide-react';
+
+const faqs = [
+  {
+    q: "Is it really brokerage-free?",
+    a: "Yes! Andaman Homes is a peer-to-peer platform. We connect property owners directly with seekers. You never have to pay a commission to a middleman."
+  },
+  {
+    q: "How many properties can I list for free?",
+    a: "Every user gets up to 10 free listings. After that, we charge a nominal fee of ₹20 per listing to maintain the platform and prevent spam."
+  },
+  {
+    q: "How do I contact an owner?",
+    a: "Simply click on any property listing and use the 'Chat' button. You can also see the owner's contact number if they have chosen to make it public."
+  },
+  {
+    q: "Is my personal data safe?",
+    a: "Absolutely. we use Industry-standard Firebase encryption for your data. Your phone number is only shown to verified users when you explicitly list it in an ad."
+  }
+];
 
 const Account: React.FC = () => {
   const navigate = useNavigate();
@@ -26,6 +46,7 @@ const Account: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((curr) => {
@@ -60,14 +81,11 @@ const Account: React.FC = () => {
     if (!user) return;
     setLoading(true);
     try {
-      // First delete profile in DB
       await db.collection('users').doc(user.uid).delete();
-      // Delete Auth account
       await user.delete();
       navigate('/login');
     } catch (err: any) {
-      console.error(err);
-      setError("To delete your account, you must have logged in recently. Please logout and login again, then try deleting.");
+      setError("Recent login required to delete account. Please logout and login again.");
       setShowDeleteModal(false);
     } finally {
       setLoading(false);
@@ -97,13 +115,13 @@ const Account: React.FC = () => {
 
         {message && (
             <div className="bg-green-50 text-green-600 p-4 rounded-2xl mb-6 flex items-center gap-3 border border-green-100 text-sm animate-in slide-in-from-top-2">
-                <ShieldAlert size={18} /> {message}
+                <CheckCircle2 size={18} /> {message}
             </div>
         )}
 
         {/* Settings Section */}
         <section className="mb-8">
-            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-gray-400 mb-4 ml-2">Settings</h2>
+            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-gray-400 mb-4 ml-2">Account Settings</h2>
             <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
                 
                 <button 
@@ -151,71 +169,71 @@ const Account: React.FC = () => {
             </div>
         </section>
 
-        {/* Help & Support Section */}
-        <section>
+        {/* Support & FAQs */}
+        <section className="mb-8">
             <h2 className="text-xs font-black uppercase tracking-[0.2em] text-gray-400 mb-4 ml-2">Help & Support</h2>
             <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
-                
-                <div className="flex items-center justify-between p-5">
-                    <div className="flex items-center gap-4">
-                        <div className="bg-brand-50 p-2 rounded-xl text-brand-600"><Phone size={20} /></div>
-                        <div>
-                            <p className="text-sm font-bold text-gray-900">Call Us</p>
-                            <p className="text-[10px] text-gray-400 font-medium">+91 (ANDAMAN) HOMES</p>
-                        </div>
-                    </div>
-                    <a href="tel:+910000000000" className="text-brand-600 text-xs font-bold uppercase">Call</a>
-                </div>
-
                 <div className="flex items-center justify-between p-5">
                     <div className="flex items-center gap-4">
                         <div className="bg-brand-50 p-2 rounded-xl text-brand-600"><Mail size={20} /></div>
                         <div>
                             <p className="text-sm font-bold text-gray-900">Email Support</p>
-                            <p className="text-[10px] text-gray-400 font-medium">support@andamanhomes.com</p>
+                            <p className="text-[10px] text-gray-400 font-medium">Get help within 24 hours</p>
                         </div>
                     </div>
-                    <a href="mailto:support@andamanhomes.com" className="text-brand-600 text-xs font-bold uppercase">Email</a>
+                    <a href="mailto:support@andamanhomes.com" className="text-brand-600 text-xs font-bold uppercase hover:underline">Email Us</a>
                 </div>
+            </div>
 
-                <div className="flex items-center justify-between p-5">
-                    <div className="flex items-center gap-4">
-                        <div className="bg-brand-50 p-2 rounded-xl text-brand-600"><HelpCircle size={20} /></div>
-                        <div>
-                            <p className="text-sm font-bold text-gray-900">FAQs</p>
-                            <p className="text-[10px] text-gray-400 font-medium">Common questions and answers</p>
-                        </div>
+            <div className="mt-6 space-y-3">
+                <h3 className="text-xs font-black uppercase tracking-[0.1em] text-gray-400 mb-2 ml-2">Frequently Asked Questions</h3>
+                {faqs.map((faq, idx) => (
+                    <div key={idx} className="bg-white rounded-2xl border border-gray-100 overflow-hidden transition-all shadow-sm">
+                        <button 
+                          onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
+                          className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 transition-colors"
+                        >
+                            <span className="text-sm font-bold text-gray-800 pr-4">{faq.q}</span>
+                            {openFaq === idx ? <ChevronDown size={18} className="text-brand-600 rotate-180 transition-transform" /> : <ChevronRight size={18} className="text-gray-300" />}
+                        </button>
+                        {openFaq === idx && (
+                            <div className="px-4 pb-4 animate-in slide-in-from-top-1 duration-200">
+                                <p className="text-xs text-gray-500 leading-relaxed font-medium bg-gray-50 p-3 rounded-xl border border-gray-100">
+                                    {faq.a}
+                                </p>
+                            </div>
+                        )}
                     </div>
-                    <ChevronRight size={18} className="text-gray-300" />
-                </div>
+                ))}
             </div>
         </section>
 
-        {/* Delete Confirmation Modal */}
+        {/* Trust Footer */}
+        <div className="text-center py-6 flex flex-col items-center opacity-40 grayscale hover:grayscale-0 transition-all cursor-default">
+            <ShieldCheck size={32} className="text-brand-600 mb-2" />
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-600">Secure Island Living</p>
+        </div>
+
+        {/* Delete Modal */}
         {showDeleteModal && (
-            <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
                 <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm text-center animate-in zoom-in duration-200">
                     <div className="bg-red-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 text-red-600">
                         <ShieldAlert size={32} />
                     </div>
-                    <h3 className="text-xl font-black text-gray-900 mb-2">Are you sure?</h3>
+                    <h3 className="text-xl font-black text-gray-900 mb-2">Delete Account?</h3>
                     <p className="text-sm text-gray-500 mb-8 leading-relaxed">
-                        This action is permanent. All your listings, messages, and profile data will be erased forever.
+                        This is permanent. You will lose access to all your listings and chats immediately.
                     </p>
                     <div className="flex flex-col gap-3">
                         <button 
                           onClick={handleDeleteAccount}
                           disabled={loading}
-                          className="bg-red-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-red-100 flex items-center justify-center gap-2"
+                          className="bg-red-600 text-white font-black py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2"
                         >
-                            {loading ? <Loader2 className="animate-spin" /> : 'Yes, Delete Permanently'}
+                            {loading ? <Loader2 className="animate-spin" /> : 'Yes, Delete Everything'}
                         </button>
-                        <button 
-                          onClick={() => setShowDeleteModal(false)}
-                          className="text-gray-400 font-bold py-2 text-sm uppercase tracking-widest"
-                        >
-                            Cancel
-                        </button>
+                        <button onClick={() => setShowDeleteModal(false)} className="text-gray-400 font-bold py-2 text-sm uppercase tracking-widest">Keep My Account</button>
                     </div>
                 </div>
             </div>

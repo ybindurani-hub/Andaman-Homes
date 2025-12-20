@@ -4,7 +4,23 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebase';
 import firebase from 'firebase/compat/app';
 import { Property } from '../types';
-import { MapPin, BedDouble, Bath, Ruler, CheckCircle, ArrowLeft, Phone, Tag, MessageSquare, ImageOff, ShieldAlert, Trash2, Loader2 } from 'lucide-react';
+import { 
+  MapPin, 
+  BedDouble, 
+  Bath, 
+  Ruler, 
+  Heart, 
+  ArrowLeft, 
+  Phone, 
+  Tag, 
+  MessageSquare, 
+  ImageOff, 
+  ShieldAlert, 
+  Trash2, 
+  Loader2,
+  Share2,
+  Check
+} from 'lucide-react';
 
 const PropertyDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -14,13 +30,14 @@ const PropertyDetails: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeImage, setActiveImage] = useState('');
   const [isOwner, setIsOwner] = useState(false);
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const fetchProperty = async () => {
       if (!id) return;
       try {
         setLoading(true);
-        // Changed collection name to 'properties'
         const doc = await db.collection("properties").doc(id).get();
         if (doc.exists) {
           const data = { id: doc.id, ...doc.data() } as Property;
@@ -39,6 +56,56 @@ const PropertyDetails: React.FC = () => {
     };
     fetchProperty();
   }, [id]);
+
+  useEffect(() => {
+    if (!auth.currentUser || !id) return;
+    const favRef = db.collection('users').doc(auth.currentUser.uid).collection('favorites').doc(id);
+    const unsubscribe = favRef.onSnapshot(doc => {
+      setIsFavorited(doc.exists);
+    });
+    return () => unsubscribe();
+  }, [id]);
+
+  const toggleFavorite = async () => {
+    if (!auth.currentUser) return navigate('/login');
+    if (!id) return;
+    
+    const favRef = db.collection('users').doc(auth.currentUser.uid).collection('favorites').doc(id);
+    
+    try {
+      if (isFavorited) {
+        await favRef.delete();
+      } else {
+        await favRef.set({
+          propertyId: id,
+          savedAt: new Date().getTime()
+        });
+      }
+    } catch (err) {
+      console.error("Error updating favorites:", err);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!property) return;
+    const shareData = {
+      title: property.title,
+      text: `Check out this property on Andaman Homes: ${property.title} in ${property.address}`,
+      url: window.location.href,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    } catch (err) {
+      console.error("Error sharing:", err);
+    }
+  };
 
   const handleStartChat = async () => {
     if (!auth.currentUser) return navigate('/login');
@@ -78,11 +145,31 @@ const PropertyDetails: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <button onClick={() => navigate(-1)} className="flex items-center text-gray-500 mb-4 font-bold uppercase text-xs tracking-widest"><ArrowLeft size={16} className="mr-1" /> Back</button>
+        <div className="flex justify-between items-center mb-4">
+            <button onClick={() => navigate(-1)} className="flex items-center text-gray-500 font-bold uppercase text-xs tracking-widest transition-colors hover:text-gray-900"><ArrowLeft size={16} className="mr-1" /> Back</button>
+            <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleShare}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border ${copied ? 'bg-green-50 border-green-100 text-green-600' : 'bg-white border-gray-200 text-gray-500 hover:border-brand-200 hover:text-brand-600'}`}
+                >
+                    {copied ? <Check size={16} /> : <Share2 size={16} />}
+                    {copied ? 'Link Copied' : 'Share'}
+                </button>
+                {!isOwner && (
+                    <button 
+                      onClick={toggleFavorite}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border ${isFavorited ? 'bg-red-50 border-red-100 text-red-600' : 'bg-white border-gray-200 text-gray-500 hover:border-red-200 hover:text-red-500'}`}
+                    >
+                        <Heart size={16} className={isFavorited ? 'fill-current' : ''} />
+                        {isFavorited ? 'Saved' : 'Save'}
+                    </button>
+                )}
+            </div>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-4">
-                <div className="aspect-video bg-black rounded-3xl overflow-hidden relative">
+                <div className="aspect-video bg-black rounded-3xl overflow-hidden relative shadow-lg">
                      <img src={activeImage} className="w-full h-full object-contain" />
                      {property.status && property.status !== 'active' && (
                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
@@ -91,9 +178,9 @@ const PropertyDetails: React.FC = () => {
                      )}
                 </div>
                 {property.imageUrls && property.imageUrls.length > 1 && (
-                    <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                    <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                         {property.imageUrls.map((img, i) => (
-                            <button key={i} onClick={() => setActiveImage(img)} className={`w-20 h-20 rounded-xl overflow-hidden border-2 flex-shrink-0 ${activeImage === img ? 'border-brand-500' : 'border-transparent'}`}>
+                            <button key={i} onClick={() => setActiveImage(img)} className={`w-20 h-20 rounded-xl overflow-hidden border-2 flex-shrink-0 transition-all ${activeImage === img ? 'border-brand-500 scale-95 shadow-inner' : 'border-transparent opacity-70 hover:opacity-100'}`}>
                                 <img src={img} className="w-full h-full object-cover" />
                             </button>
                         ))}
@@ -104,10 +191,10 @@ const PropertyDetails: React.FC = () => {
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
                 <div className="flex justify-between items-start mb-6">
                     <div>
-                        <h1 className="text-2xl font-black text-gray-900 mb-2">{property.title}</h1>
+                        <h1 className="text-2xl font-black text-gray-900 mb-2 leading-tight">{property.title}</h1>
                         <p className="flex items-center text-gray-500 text-sm"><MapPin size={16} className="mr-1 text-brand-500" /> {property.address}</p>
                     </div>
-                    <span className="bg-brand-50 text-brand-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest">{property.category}</span>
+                    <span className="bg-brand-50 text-brand-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap">{property.category}</span>
                 </div>
 
                 <div className="grid grid-cols-3 gap-4 mb-8 bg-gray-50 p-4 rounded-2xl border border-gray-100">
@@ -134,7 +221,7 @@ const PropertyDetails: React.FC = () => {
 
                 <div className="pt-6 border-t border-gray-100 flex items-center justify-between gap-4">
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Fixed Price</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Expected Price</p>
                         <p className="text-3xl font-black text-brand-700">₹ {property.price.toLocaleString('en-IN')}</p>
                     </div>
                     
