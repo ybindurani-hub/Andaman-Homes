@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
+import ScrollToTop from './components/ScrollToTop';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -58,7 +59,6 @@ const ProtectedRoute = ({ children, user, loading }: any) => {
 };
 
 const AuthHandler = ({ setUser, setLoading }: any) => {
-    const location = useLocation();
     useEffect(() => {
         const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
             if (currentUser) {
@@ -80,6 +80,7 @@ const App: React.FC = () => {
 
   return (
     <Router>
+      <ScrollToTop />
       <AuthHandler setUser={setUser} setLoading={setLoading} />
       <div className="min-h-screen bg-gray-50 font-sans text-slate-900 pb-20 md:pb-0">
         <Navbar />
