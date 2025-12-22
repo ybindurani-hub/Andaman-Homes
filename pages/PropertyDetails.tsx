@@ -21,6 +21,7 @@ import {
   Share2,
   Check
 } from 'lucide-react';
+import { InterstitialAd } from '../components/AdSpaces';
 
 const PropertyDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -32,6 +33,7 @@ const PropertyDetails: React.FC = () => {
   const [isOwner, setIsOwner] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showAd, setShowAd] = useState(false);
 
   useEffect(() => {
     const fetchProperty = async () => {
@@ -45,6 +47,9 @@ const PropertyDetails: React.FC = () => {
           if (auth.currentUser && data.ownerId === auth.currentUser.uid) setIsOwner(true);
           const images = data.imageUrls && data.imageUrls.length > 0 ? data.imageUrls : [data.imageUrl];
           setActiveImage(images[0]);
+          
+          // Trigger Ad after content loads
+          setTimeout(() => setShowAd(true), 1500);
         } else {
           setError("Listing not found.");
         }
@@ -144,6 +149,8 @@ const PropertyDetails: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
+      <InterstitialAd isOpen={showAd} onFinish={() => setShowAd(false)} />
+      
       <div className="max-w-6xl mx-auto px-4 py-6">
         <div className="flex justify-between items-center mb-4">
             <button onClick={() => navigate(-1)} className="flex items-center text-gray-500 font-bold uppercase text-xs tracking-widest transition-colors hover:text-gray-900"><ArrowLeft size={16} className="mr-1" /> Back</button>
