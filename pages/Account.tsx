@@ -5,11 +5,9 @@ import { auth, db } from '../firebase';
 import firebase from 'firebase/compat/app';
 import { 
   User, 
-  Settings, 
   LogOut, 
   ShieldAlert, 
   Key, 
-  HelpCircle, 
   ChevronRight, 
   ChevronDown,
   Mail, 
@@ -17,7 +15,8 @@ import {
   AlertCircle,
   Loader2,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  BookOpen
 } from 'lucide-react';
 
 const faqs = [
@@ -35,7 +34,7 @@ const faqs = [
   },
   {
     q: "Is my personal data safe?",
-    a: "Absolutely. we use Industry-standard Firebase encryption for your data. Your phone number is only shown to verified users when you explicitly list it in an ad."
+    a: "Absolutely. We use Industry-standard Firebase encryption for your data. Your phone number is only shown to verified users when you explicitly list it in an ad."
   }
 ];
 
@@ -171,8 +170,8 @@ const Account: React.FC = () => {
 
         {/* Support & FAQs */}
         <section className="mb-8">
-            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-gray-400 mb-4 ml-2">Help & Support</h2>
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
+            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-gray-400 mb-4 ml-2">Support & FAQ</h2>
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50 mb-6">
                 <div className="flex items-center justify-between p-5">
                     <div className="flex items-center gap-4">
                         <div className="bg-brand-50 p-2 rounded-xl text-brand-600"><Mail size={20} /></div>
@@ -181,12 +180,15 @@ const Account: React.FC = () => {
                             <p className="text-[10px] text-gray-400 font-medium">Get help within 24 hours</p>
                         </div>
                     </div>
-                    <a href="mailto:support@andamanhomes.com" className="text-brand-600 text-xs font-bold uppercase hover:underline">Email Us</a>
+                    <a href="mailto:support@andamanhomes.com" className="text-brand-600 text-xs font-black uppercase hover:underline">Contact</a>
                 </div>
             </div>
 
-            <div className="mt-6 space-y-3">
-                <h3 className="text-xs font-black uppercase tracking-[0.1em] text-gray-400 mb-2 ml-2">Frequently Asked Questions</h3>
+            <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-3 ml-2">
+                    <BookOpen size={16} className="text-gray-400" />
+                    <h3 className="text-xs font-black uppercase tracking-[0.1em] text-gray-400">Frequently Asked Questions</h3>
+                </div>
                 {faqs.map((faq, idx) => (
                     <div key={idx} className="bg-white rounded-2xl border border-gray-100 overflow-hidden transition-all shadow-sm">
                         <button 

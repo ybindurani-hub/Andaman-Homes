@@ -19,12 +19,15 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onDelete }) => {
   const [isFavorited, setIsFavorited] = useState(false);
 
   useEffect(() => {
-    if (!auth.currentUser || !property.id) return;
+    let unsubscribe = () => {};
     
-    const favRef = db.collection('users').doc(auth.currentUser.uid).collection('favorites').doc(property.id);
-    const unsubscribe = favRef.onSnapshot(doc => {
-      setIsFavorited(doc.exists);
-    });
+    if (auth.currentUser && property.id) {
+        const favRef = db.collection('users').doc(auth.currentUser.uid).collection('favorites').doc(property.id);
+        unsubscribe = favRef.onSnapshot(doc => {
+            setIsFavorited(doc.exists);
+        }, (err) => console.error("Favorite listen error:", err));
+    }
+    
     return () => unsubscribe();
   }, [property.id]);
 
@@ -37,11 +40,13 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onDelete }) => {
     try {
       if (isFavorited) {
         await favRef.delete();
+        setIsFavorited(false);
       } else {
         await favRef.set({
           propertyId: property.id,
           savedAt: new Date().getTime()
         });
+        setIsFavorited(true);
       }
     } catch (err) {
       console.error("Error updating favorites:", err);
